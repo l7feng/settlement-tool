@@ -1,0 +1,1790 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%233E5C63'/%3E%3Ctext x='32' y='44' font-size='32' text-anchor='middle' fill='white' font-family='sans-serif'%3E结%3C/text%3E%3C/svg%3E">
+<title>短剧混音结算工作台</title>
+<!-- 依赖本地化：assets/ 与 html 同目录即可离线工作（exe 打包时随行） -->
+<script src="assets/xlsx.full.min.js"></script>
+<script src="assets/jszip.min.js"></script>
+<script>
+/* 兜底：本地 assets 缺失时（例如 html 被单独拷走）才回退 CDN */
+(function () {
+  function need(globalName, url) {
+    if (typeof window[globalName] === 'undefined') {
+      document.write('<script src="' + url + '"><\/script>');
+    }
+  }
+  need('XLSX', 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js');
+  need('JSZip', 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js');
+})();
+</script>
+<style>
+:root {
+  --main: #3E5C63;
+  --main-l: #EDF2F2;
+  --band: #F8FAFA;
+  --white: #FFFFFF;
+  --sum-bg: #EFF4F3;
+  --input: #FDFBF3;
+  --line: #DAE2E2;
+  --text: #2B3A3D;
+  --muted: #7A8A8C;
+  --accent: #9C6B4E;
+  --section: #F2F6F5;
+  --danger: #B5544A;
+  --bg: #F8FAFA;
+  --header-bg: #3E5C63;
+  --header-fg: #fff;
+}
+[data-theme="dark"] {
+  --main: #5B8A92;
+  --main-l: #2A3A3E;
+  --band: #1E2A2D;
+  --white: #263338;
+  --sum-bg: #2F4248;
+  --input: #2E3A2E;
+  --line: #3A4A4E;
+  --text: #D8E2E4;
+  --muted: #8AA0A4;
+  --accent: #C8956C;
+  --section: #2A3A3E;
+  --danger: #D4706A;
+  --bg: #1A2427;
+  --header-bg: #2A3A3E;
+  --header-fg: #D8E2E4;
+}
+[data-theme="paper"] {
+  --main: #8A6A45; --main-l: #F5EFE6; --band: #FAF6F0; --white: #FFFFFF;
+  --sum-bg: #F2EAE0; --input: #FDFBF3; --line: #E2D8CC; --text: #3A322A;
+  --muted: #8A7A68; --accent: #A87C4A; --section: #F2EAE0; --danger: #B5544A;
+  --bg: #FBF8F4; --header-bg: #8A6A45; --header-fg: #fff;
+}
+[data-theme="warm"] {
+  --main: #B08050; --main-l: #3A2E24; --band: #2E251E; --white: #33291F;
+  --sum-bg: #4A3A2C; --input: #3A2F24; --line: #4A3C2E; --text: #EBDCC8;
+  --muted: #B39C82; --accent: #D9A441; --section: #3A2E24; --danger: #D4706A;
+  --bg: #241D16; --header-bg: #3A2E24; --header-fg: #EBDCC8;
+}
+[data-theme="ocean"] {
+  --main: #4F7EA8; --main-l: #26333F; --band: #1E2833; --white: #263242;
+  --sum-bg: #2E4256; --input: #243244; --line: #35485C; --text: #D6E2EE;
+  --muted: #8FA6BC; --accent: #E0A458; --section: #26333F; --danger: #D4706A;
+  --bg: #172029; --header-bg: #26333F; --header-fg: #D6E2EE;
+}
+[data-theme="forest"] {
+  --main: #5F9470; --main-l: #263A2C; --band: #1E2A22; --white: #26332A;
+  --sum-bg: #2F4A38; --input: #2E3A2E; --line: #3A4A3E; --text: #D8E4D8;
+  --muted: #8AA48E; --accent: #C8956C; --section: #263A2C; --danger: #D4706A;
+  --bg: #1A241D; --header-bg: #263A2C; --header-fg: #D8E4D8;
+}
+[data-theme="violet"] {
+  --main: #7E6BA8; --main-l: #2E2A3E; --band: #241F33; --white: #2C2740;
+  --sum-bg: #3D3455; --input: #322C46; --line: #423A58; --text: #E0DCEE;
+  --muted: #A094C0; --accent: #D9A0C0; --section: #2E2A3E; --danger: #D4706A;
+  --bg: #1C1826; --header-bg: #2E2A3E; --header-fg: #E0DCEE;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
+  transition: background .2s, color .2s;
+}
+/* ── 顶栏 ── */
+.topbar {
+  background: var(--main);
+  color: #fff;
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky; top: 0; z-index: 100;
+}
+.topbar h1 { font-size: 18px; font-weight: 600; }
+.topbar .right { display: flex; align-items: center; gap: 10px; }
+.topbar label { font-size: 13px; opacity: .85; }
+.topbar select {
+  background: rgba(255,255,255,.15);
+  color: #fff; border: 1px solid rgba(255,255,255,.3);
+  padding: 4px 8px; border-radius: 4px; font-size: 13px;
+}
+.topbar select option { color: var(--text); }
+/* ── 卡片 ── */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  padding: 16px 20px 8px;
+}
+.card {
+  background: var(--main-l);
+  border-radius: 8px;
+  padding: 14px 18px;
+}
+.card .label { font-size: 12px; color: var(--muted); }
+.card .value { font-size: 26px; font-weight: 700; color: var(--accent); margin-top: 2px; }
+/* ── 工具栏 ── */
+.toolbar {
+  padding: 10px 20px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.btn {
+  background: var(--main);
+  color: #fff;
+  border: none;
+  padding: 7px 14px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 13px;
+  font-family: inherit;
+}
+.btn:hover { opacity: .9; }
+.btn.secondary { background: var(--white); color: var(--main); border: 1px solid var(--line); }
+.btn.accent { background: var(--accent); }
+.btn.danger { background: var(--danger); }
+/* ── tab ── */
+.tabs {
+  padding: 0 20px;
+  display: flex;
+  gap: 4px;
+  border-bottom: 2px solid var(--line);
+}
+.tab {
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--muted);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+}
+.tab.active { color: var(--main); border-bottom-color: var(--main); font-weight: 600; }
+/* ── 主内容 ── */
+.content { padding: 14px 20px 40px; }
+.view { display: none; }
+.view.active { display: block; }
+/* ── 表格 ── */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--white);
+  font-size: 13px;
+}
+th, td {
+  padding: 7px 10px;
+  text-align: center;
+  border-bottom: 1px solid var(--line);
+}
+th {
+  background: var(--main);
+  color: #fff;
+  font-weight: 600;
+  position: sticky; top: 0;
+}
+td.l, th.l { text-align: left; }
+td.r, th.r { text-align: right; }
+tr:nth-child(even) td { background: var(--band); }
+tr.subtotal td { background: var(--sum-bg); font-weight: 600; color: var(--main); }
+tr.grand td { background: var(--main); color: #fff; font-weight: 700; font-size: 14px; }
+/* ── 行内删除：默认很淡，悬停才清晰（设置里可开关） ── */
+.btn-del-x {
+  background: transparent; border: none; color: var(--muted);
+  font-size: 15px; line-height: 1; padding: 0 6px; cursor: pointer;
+  opacity: .28; transition: opacity .15s, color .15s;
+}
+tr:hover .btn-del-x { opacity: .8; }
+.btn-del-x:hover { opacity: 1; color: var(--danger); }
+body.del-hover .btn-del-x { visibility: hidden; }
+body.del-hover tr:hover .btn-del-x { visibility: visible; }
+/* ── 删除模式下的醒目红色删除符 ── */
+.btn-del-red {
+  background: var(--danger); color: #fff; border: none;
+  border-radius: 4px; padding: 2px 8px; font-size: 12px;
+  cursor: pointer; font-family: inherit; line-height: 1.4;
+}
+.btn-del-red:hover { opacity: .85; }
+/* ── 行内编辑 ── */
+.btn-edit {
+  background: transparent; border: none; color: var(--muted);
+  font-size: 13px; padding: 0 5px; cursor: pointer; opacity: .3;
+  transition: opacity .15s, color .15s;
+}
+tr:hover .btn-edit { opacity: .8; }
+.btn-edit:hover { opacity: 1; color: var(--main); }
+/* ── 月度折叠 ── */
+.month-group { margin-bottom: 6px; }
+.month-header {
+  background: var(--section);
+  padding: 9px 14px;
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--main);
+  border-left: 3px solid var(--main);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  user-select: none;
+}
+.month-header:hover { background: var(--main-l); }
+.month-header .stat { font-weight: 400; color: var(--muted); font-size: 12px; }
+.month-header .toggle { margin-right: 8px; }
+.month-body { display: block; }
+.month-group.collapsed .month-body { display: none; }
+/* ── 全部合计 ── */
+.grand-total {
+  display: flex; gap: 20px; flex-wrap: wrap; align-items: baseline;
+  background: var(--main); color: #fff;
+  padding: 10px 16px; border-radius: 6px; margin-bottom: 10px;
+  font-size: 13px;
+}
+.grand-total .gt-item b { font-size: 16px; margin: 0 2px; }
+/* ── 筛选栏 ── */
+.filter-bar {
+  padding: 8px 20px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-size: 13px;
+  color: var(--muted);
+}
+.filter-bar select {
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font-family: inherit;
+}
+/* ── 拖拽区 ── */
+.drop-zone {
+  margin: 10px 20px;
+  border: 2px dashed var(--line);
+  border-radius: 8px;
+  padding: 20px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+  transition: all .2s;
+}
+.drop-zone.dragover {
+  border-color: var(--main);
+  background: var(--main-l);
+  color: var(--main);
+}
+/* ── 弹窗 ── */
+.modal-mask {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.35);
+  z-index: 200;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 60px;
+}
+.modal-mask.show { display: flex; }
+.modal {
+  background: var(--white);
+  border-radius: 10px;
+  padding: 22px;
+  width: 460px;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 30px rgba(0,0,0,.15);
+}
+.modal h2 { font-size: 16px; color: var(--main); margin-bottom: 16px; }
+.form-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+  gap: 8px;
+}
+.form-row label { width: 80px; text-align: right; font-size: 13px; color: var(--muted); flex-shrink: 0; }
+.form-row input, .form-row select {
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 13px;
+}
+.form-row input:focus, .form-row select:focus { outline: none; border-color: var(--main); }
+.modal-actions {
+  margin-top: 18px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+/* ── 日历 ── */
+.cal-nav {
+  display: flex; justify-content: center; align-items: center;
+  gap: 16px; padding: 10px 0;
+}
+.cal-nav button {
+  background: var(--white); border: 1px solid var(--line);
+  padding: 4px 12px; border-radius: 4px; cursor: pointer;
+  font-family: inherit;
+}
+.cal-nav .cal-title { font-size: 15px; font-weight: 600; color: var(--main); }
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin-bottom: 16px;
+}
+.cal-cell {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  min-height: 92px;
+  padding: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all .15s;
+  display: flex;
+  flex-direction: column;
+}
+.cal-cell:hover { border-color: var(--main); }
+.cal-cell.empty { background: var(--band); opacity: .5; cursor: default; }
+.cal-cell.today { border-color: var(--accent); border-width: 2px; }
+.cal-cell.selected { background: var(--main-l); border-color: var(--main); border-width: 2px; }
+.cal-cell .dow { font-weight: 700; color: var(--text); font-size: 12px; }
+.cal-cell .eplist { flex:1; color: var(--main); font-size: 10.5px; line-height:1.35; margin-top:2px; word-break:break-all; overflow:hidden; }
+.cal-cell .cellfoot { margin-top:auto; padding-top:2px; font-size:10.5px; display:flex; justify-content:space-between; }
+.cal-cell .count { color: var(--accent); font-weight: 700; }
+.cal-cell .fee { color: var(--muted); }
+.cal-dow-header {
+  display: grid; grid-template-columns: repeat(7, 1fr);
+  text-align: center; font-size: 12px; color: var(--muted);
+  padding-bottom: 4px;
+}
+
+/* ── toast ── */
+.toast {
+  position: fixed;
+  bottom: 30px; left: 50%;
+  transform: translateX(-50%);
+  background: var(--main);
+  color: #fff;
+  padding: 10px 22px;
+  border-radius: 6px;
+  font-size: 13px;
+  z-index: 300;
+  opacity: 0;
+  transition: opacity .3s;
+  pointer-events: none;
+}
+.toast.show { opacity: 1; }
+/* ── 小屏 ── */
+@media (max-width: 700px) {
+  .cards { grid-template-columns: 1fr; }
+  .topbar { flex-direction: column; gap: 8px; }
+  table { font-size: 12px; }
+  th, td { padding: 5px 6px; }
+}
+</style>
+</head>
+<body>
+
+<!-- 顶栏 -->
+<div class="topbar">
+  <h1>短剧混音结算工作台</h1>
+  <div class="right">
+    <label>结算周期</label>
+    <select id="cycleSelect">
+      <option value="natural">自然月（1号~月底）</option>
+      <option value="half">半月结（16号~次月15号）</option>
+    </select>
+    <button class="btn" style="background:transparent;border:1px solid var(--line)" onclick="toggleTheme()">🌓 主题</button>
+    <button class="btn" style="background:var(--white);color:var(--main)" onclick="exportXlsx()">导出 Excel</button>
+  </div>
+</div>
+
+<!-- 汇总卡片 -->
+<div class="cards">
+  <div class="card"><div class="label">总集数</div><div class="value" id="cardEps">—</div></div>
+  <div class="card"><div class="label">总时长（分钟）</div><div class="value" id="cardMin">—</div></div>
+  <div class="card"><div class="label">结算总额（元）</div><div class="value" id="cardFee">—</div></div>
+</div>
+
+<!-- 工具栏 -->
+<div class="toolbar">
+  <button class="btn" onclick="openAddEp()">+ 登记集</button>
+  <button class="btn secondary" onclick="openBatch()">+ 批量登记</button>
+  <button class="btn secondary" onclick="openAddProject()">+ 新增项目</button>
+  <button class="btn secondary" onclick="openPrices()">改单价</button>
+  <button class="btn secondary" onclick="openSettings()">⚙ 设置</button>
+  <button class="btn" id="modeToggle" onclick="toggleDelMode()"></button>
+  <button class="btn danger" id="batchDelBtn" style="display:none" onclick="batchDeleteEps()">删除所选（<span id="selCount">0</span>）</button>
+  <button class="btn secondary" id="undoBtn" style="display:none" onclick="undoDelete()">↩ 撤销</button>
+  <label id="selWrap" style="display:inline-flex;align-items:center;gap:4px;font-size:13px;color:var(--muted);cursor:pointer"><input type="checkbox" id="selAll" onchange="toggleSelAll(this)"> 全选</label>
+  <button class="btn secondary" onclick="exportJSON()">备份 JSON</button>
+  <button class="btn secondary" onclick="document.getElementById('importFile').click()">恢复 JSON</button>
+  <input type="file" id="importFile" accept=".json" style="display:none" onchange="importJSON(event)">
+</div>
+
+<!-- 拖拽区 / 点击选文件夹 -->
+<div class="drop-zone" id="dropZone">
+  拖拽交付文件夹到这里，或点击选择文件夹 —— 自动扫描 wav、读取时长、按文件名识别集号
+  <input type="file" id="folderInput" webkitdirectory directory multiple style="display:none">
+</div>
+
+<!-- tab 切换 -->
+<div class="tabs">
+  <div class="tab active" data-view="detail" onclick="switchTab('detail')">月度明细</div>
+  <div class="tab" data-view="byProject" onclick="switchTab('byProject')">按项目</div>
+  <div class="tab" data-view="byGrade" onclick="switchTab('byGrade')">按等级</div>
+</div>
+
+<!-- 筛选 -->
+<div class="filter-bar" id="filterBar">
+  <span>月份：</span>
+  <select id="monthFilter" onchange="render()">
+    <option value="">全部</option>
+  </select>
+  <span>等级：</span>
+  <select id="gradeFilter" onchange="render()">
+    <option value="">全部</option>
+    <option>A</option><option>B</option><option>C</option><option>D</option>
+  </select>
+  <span>项目：</span>
+  <select id="projFilter" onchange="render()">
+    <option value="">全部</option>
+  </select>
+  <span>计价：</span>
+  <select id="modeFilter" onchange="render()">
+    <option value="">全部</option>
+    <option>按集</option><option>按时长</option>
+  </select>
+  <span style="margin-left:16px">排序：</span>
+  <select id="sortMode" onchange="render()">
+    <option value="project">按项目</option>
+    <option value="time" selected>按时间（日历）</option>
+  </select>
+</div>
+
+<!-- 主内容 -->
+<div class="content">
+  <div class="view active" id="view-detail"></div>
+  <div class="view" id="view-byProject"></div>
+  <div class="view" id="view-byGrade"></div>
+</div>
+
+<!-- 弹窗占位 -->
+<div class="modal-mask" id="modalMask">
+  <div class="modal" id="modalBox"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+// 数据层
+// ═══════════════════════════════════════════════════════
+const STORE_KEY = 'settlement_v1';
+
+const DEFAULT_DATA = {
+  "prices": {"A":{"per_min":78,"per_ep":78},"B":{"per_min":30,"per_ep":30},"C":{"per_min":15,"per_ep":15},"D":{"per_min":10,"per_ep":10}},
+  "projects": [
+    {"name":"巨巫","grade":"C","type":"正式","mode":"按时长","path":"D:\\Project\\1-巨巫C_20260810_7F\\Out","episodes":{"5":{"date":"2026-08-14","duration":"00:01:41"},"6":{"date":"2026-08-14","duration":"00:01:15"},"7":{"date":"2026-08-14","duration":"00:01:09"}}},
+    {"name":"独眼","grade":"C","type":"正式","mode":"按时长","path":"D:\\Project\\2-独眼C_20260818_7F\\交付文件","episodes":{"5":{"date":"2026-08-19","duration":"00:01:47"},"6":{"date":"2026-08-19","duration":"00:01:30"},"7":{"date":"2026-08-19","duration":"00:01:23"}}},
+    {"name":"首付","grade":"C","type":"正式","mode":"按时长","path":"D:\\Project\\3-首付C_20260813_7f\\0-归档\\交付文件","episodes":{"2":{"date":"2026-08-12","duration":"00:02:38"},"3":{"date":"2026-08-12","duration":"00:01:41"},"4":{"date":"2026-08-12","duration":"00:01:54"},"6":{"date":"2026-08-17","duration":"00:01:17"},"7":{"date":"2026-08-13","duration":"00:01:00"},"8":{"date":"2026-08-13","duration":"00:01:23"},"9":{"date":"2026-08-13","duration":"00:01:04"},"10":{"date":"2026-08-13","duration":"00:01:07"},"11":{"date":"2026-08-14","duration":"00:01:32"},"12":{"date":"2026-08-14","duration":"00:01:31"},"13":{"date":"2026-08-14","duration":"00:01:32"},"14":{"date":"2026-08-14","duration":"00:01:12"},"15":{"date":"2026-08-14","duration":"00:01:16"},"16":{"date":"2026-08-14","duration":"00:01:46"},"17":{"date":"2026-08-14","duration":"00:01:29"},"18":{"date":"2026-08-17","duration":"00:01:30"},"19":{"date":"2026-08-17","duration":"00:02:00"},"20":{"date":"2026-08-17","duration":"00:01:07"}}},
+    {"name":"女帝","grade":"C","type":"正式","mode":"按时长","path":"D:\\Project\\4-女帝C_20260825_7F\\交付文件","episodes":{"17":{"date":"2026-08-31","duration":"00:01:16"},"18":{"date":"2026-08-31","duration":"00:01:13"},"19":{"date":"2026-08-31","duration":"00:01:25"},"20":{"date":"2026-08-31","duration":"00:01:35"},"21":{"date":"2026-08-31","duration":"00:01:21"},"22":{"date":"2026-08-31","duration":"00:01:56"},"23":{"date":"2026-09-01","duration":"00:01:45"},"24":{"date":"2026-09-01","duration":"00:01:34"},"37":{"date":"2026-09-01","duration":"00:01:08"},"38":{"date":"2026-09-01","duration":"00:01:17"},"39":{"date":"2026-09-01","duration":"00:01:45"},"40":{"date":"2026-09-01","duration":"00:01:15"},"48":{"date":"2026-08-27","duration":"00:01:48"},"49":{"date":"2026-08-27","duration":"00:01:43"},"50":{"date":"2026-08-27","duration":"00:01:51"},"51":{"date":"2026-08-27","duration":"00:01:50"},"52":{"date":"2026-08-27","duration":"00:01:29"},"53":{"date":"2026-08-27","duration":"00:01:29"},"54":{"date":"2026-08-27","duration":"00:01:40"},"55":{"date":"2026-08-27","duration":"00:01:42"},"56":{"date":"2026-08-27","duration":"00:01:29"},"57":{"date":"2026-08-27","duration":"00:01:40"},"58":{"date":"2026-08-26","duration":"00:01:53"},"59":{"date":"2026-08-26","duration":"00:01:50"},"60":{"date":"2026-08-26","duration":"00:01:40"},"61":{"date":"2026-08-26","duration":"00:01:51"},"62":{"date":"2026-08-26","duration":"00:01:31"},"63":{"date":"2026-08-26","duration":"00:01:32"},"66":{"date":"2026-08-25","duration":"00:02:11"},"67":{"date":"2026-08-25","duration":"00:01:37"},"68":{"date":"2026-08-25","duration":"00:02:05"},"69":{"date":"2026-08-25","duration":"00:01:41"},"70":{"date":"2026-08-28","duration":"00:01:33"},"71":{"date":"2026-08-25","duration":"00:01:22"},"72":{"date":"2026-08-26","duration":"00:01:30"},"73":{"date":"2026-08-26","duration":"00:01:16"},"74":{"date":"2026-08-26","duration":"00:01:59"},"75":{"date":"2026-08-26","duration":"00:01:51"},"76":{"date":"2026-09-01","duration":"00:01:42"},"77":{"date":"2026-09-01","duration":"00:01:16"},"78":{"date":"2026-09-01","duration":"00:01:17"},"79":{"date":"2026-09-01","duration":"00:02:20"},"80":{"date":"2026-09-01","duration":"00:02:09"}}},
+    {"name":"人鱼","grade":"D","type":"正式","mode":"按时长","path":"D:\\Project\\5-人鱼D_20260831_7F\\交付文件","episodes":{"14":{"date":"2026-08-31","duration":"00:01:43"},"16":{"date":"2026-08-31","duration":"00:01:34"},"17":{"date":"2026-09-02","duration":"00:02:07"},"18":{"date":"2026-09-02","duration":"00:02:06"},"44":{"date":"2026-08-31","duration":"00:01:10"},"45":{"date":"2026-08-31","duration":"00:01:10"},"58":{"date":"2026-09-01","duration":"00:01:52"},"59":{"date":"2026-09-01","duration":"00:01:19"},"60":{"date":"2026-09-01","duration":"00:02:09"}}},
+    {"name":"抛弃","grade":"D","type":"正式","mode":"按时长","path":"D:\\Project\\6-抛弃D_20260901_7F\\交付文件\\被丈夫抛弃 （4、5集）0901 V02","episodes":{"4":{"date":"2026-09-01","duration":"00:01:54"},"5":{"date":"2026-09-01","duration":"00:01:40"}}},
+    {"name":"婚宠","grade":"D","type":"正式","mode":"按时长","path":"D:\\Project\\7-婚宠D_20260902_7F\\交付文件\\归档","episodes":{"3":{"date":"2026-09-03","duration":"00:01:51"},"5":{"date":"2026-09-02","duration":"00:01:41"},"6":{"date":"2026-09-02","duration":"00:01:18"},"7":{"date":"2026-09-02","duration":"00:01:43"},"8":{"date":"2026-09-02","duration":"00:01:39"},"9":{"date":"2026-09-02","duration":"00:01:50"},"10":{"date":"2026-09-02","duration":"00:01:50"},"11":{"date":"2026-09-02","duration":"00:01:51"},"13":{"date":"2026-09-03","duration":"00:01:33"},"23":{"date":"2026-09-03","duration":"00:01:41"},"24":{"date":"2026-09-03","duration":"00:01:35"},"25":{"date":"2026-09-03","duration":"00:01:43"},"26":{"date":"2026-09-03","duration":"00:01:43"},"27":{"date":"2026-09-03","duration":"00:01:44"},"28":{"date":"2026-09-03","duration":"00:01:48"},"29":{"date":"2026-09-03","duration":"00:01:53"},"30":{"date":"2026-09-03","duration":"00:02:42"},"31":{"date":"2026-09-03","duration":"00:02:52"},"32":{"date":"2026-09-04","duration":"00:02:08"},"33":{"date":"2026-09-04","duration":"00:01:31"},"34":{"date":"2026-09-04","duration":"00:01:17"},"35":{"date":"2026-09-04","duration":"00:01:52"},"36":{"date":"2026-09-04","duration":"00:01:46"},"37":{"date":"2026-09-04","duration":"00:02:22"},"38":{"date":"2026-09-04","duration":"00:02:03"},"39":{"date":"2026-09-04","duration":"00:01:57"},"40":{"date":"2026-09-04","duration":"00:01:48"},"41":{"date":"2026-09-04","duration":"00:02:08"},"42":{"date":"2026-09-04","duration":"00:02:18"},"43":{"date":"2026-09-04","duration":"00:01:02"},"44":{"date":"2026-09-04","duration":"00:01:44"},"45":{"date":"2026-09-04","duration":"00:02:21"},"46":{"date":"2026-09-04","duration":"00:02:20"},"47":{"date":"2026-09-04","duration":"00:01:57"},"48":{"date":"2026-09-04","duration":"00:02:24"},"49":{"date":"2026-09-04","duration":"00:02:06"},"50":{"date":"2026-09-04","duration":"00:02:33"},"51":{"date":"2026-09-04","duration":"00:02:17"},"52":{"date":"2026-09-04","duration":"00:02:10"},"53":{"date":"2026-09-04","duration":"00:02:18"},"54":{"date":"2026-09-04","duration":"00:02:20"},"55":{"date":"2026-09-04","duration":"00:02:16"}}},
+    {"name":"丑鱼","grade":"D","type":"正式","mode":"按时长","path":"D:\\Project\\8-丑鱼D_20260904_7F\\交付文件","episodes":{"2":{"date":"2026-09-07","duration":"00:01:55"},"3":{"date":"2026-09-07","duration":"00:01:42"},"4":{"date":"2026-09-04","duration":"00:01:19"},"5":{"date":"2026-09-04","duration":"00:01:25"},"16":{"date":"2026-09-07","duration":"00:01:46"},"17":{"date":"2026-09-07","duration":"00:01:34"},"18":{"date":"2026-09-07","duration":"00:01:27"},"19":{"date":"2026-09-07","duration":"00:01:06"},"20":{"date":"2026-09-07","duration":"00:01:11"},"21":{"date":"2026-09-07","duration":"00:01:35"}}},
+    {"name":"海后","grade":"A","type":"Demo","mode":"按时长","path":"D:\\Project\\0-Demo\\1-海后_20260820_7F\\交付文件","episodes":{"1":{"date":"2026-08-20","duration":"00:02:09"}}},
+    {"name":"篮球","grade":"A","type":"Demo","mode":"按时长","path":"D:\\Project\\0-Demo\\2-篮球_20260821_7F\\交付文件","episodes":{"1":{"date":"2026-08-21","duration":"00:02:59"}}},
+    {"name":"497","grade":"A","type":"Demo","mode":"按时长","path":"D:\\Project\\0-Demo\\3-497_20260821_7F","episodes":{"1":{"date":"2026-08-21","duration":"00:01:31"}}},
+    {"name":"王权","grade":"A","type":"Demo","mode":"按时长","path":"D:\\Project\\0-Demo\\4-王权_20260821_7F\\交付文件","episodes":{"1":{"date":"2026-08-27","duration":"00:03:32"}}},
+    {"name":"反派","grade":"A","type":"Demo","mode":"按时长","path":"D:\\Project\\0-Demo\\6-反派_20260901_7F","episodes":{"1":{"date":"2026-08-31","duration":"00:01:09"}}},
+    {"name":"THD","grade":"A","type":"Demo","mode":"按时长","path":"D:\\Project\\0-Demo\\7-THD_20260902_7F","episodes":{"1":{"date":"2026-09-02","duration":"00:02:53"}}},
+    {"name":"自驾","grade":"A","type":"Demo","mode":"按时长","path":"D:\\Project\\0-Demo\\5-自驾_20260828_7F","episodes":{"1":{"date":"2026-08-27","duration":"00:02:29"}}},
+    {"name":"誓言","grade":"D","type":"正式","mode":"按时长","path":"D:\\DAW-Project\\10-誓言D_20260915_7F\\交付文件","episodes":{}}
+  ]
+};
+
+let state = { cycle: 'natural', data: null, collapsed: {}, calYear: null, calMonth: null, selectedDate: null };
+
+function loadData() {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (raw) {
+      state.data = JSON.parse(raw);
+      // 迁移：公司统一按集结算，强制 mode=按集
+      for (const p of state.data.projects) p.mode = '按集';
+      return;
+    }
+  } catch(e) {}
+  state.data = JSON.parse(JSON.stringify(DEFAULT_DATA));
+  for (const p of state.data.projects) p.mode = '按集';
+  saveData();
+}
+function saveData() {
+  localStorage.setItem(STORE_KEY, JSON.stringify(state.data));
+}
+
+// ═══════════════════════════════════════════════════════
+// 计算工具
+// ═══════════════════════════════════════════════════════
+function t2sec(t) {
+  const [h,m,s] = t.split(':').map(Number);
+  return h*3600 + m*60 + s;
+}
+// 直接读 WAV 文件头算时长，不解码整个音频
+async function readWavDuration(file) {
+  const buf = await file.slice(0, 2000).arrayBuffer();
+  const dv = new DataView(buf);
+  if (dv.getUint32(0, false) !== 0x52494646) throw new Error('not RIFF');
+  let offset = 12;
+  let sampleRate = 0, bitsPerSample = 0, channels = 0, dataSize = 0;
+  while (offset + 8 <= dv.byteLength) {
+    const fc = String.fromCharCode(dv.getUint8(offset),dv.getUint8(offset+1),dv.getUint8(offset+2),dv.getUint8(offset+3));
+    const cs = dv.getUint32(offset+4, true);
+    if (fc === 'fmt ') {
+      channels = dv.getUint16(offset+10, true);
+      sampleRate = dv.getUint32(offset+12, true);
+      bitsPerSample = dv.getUint16(offset+22, true);
+    } else if (fc === 'data') {
+      dataSize = cs;
+      break;
+    }
+    offset += 8 + cs + (cs % 2);
+  }
+  if (!sampleRate || !dataSize) throw new Error('bad wav header');
+  return dataSize / (sampleRate * channels * (bitsPerSample/8));
+}
+
+function sec2str(sec) {
+  sec = Math.round(sec);
+  const h = String(Math.floor(sec/3600)).padStart(2,'0');
+  const m = String(Math.floor((sec%3600)/60)).padStart(2,'0');
+  const s = String(sec%60).padStart(2,'0');
+  return `${h}:${m}:${s}`;
+}
+function feeOf(proj, ep) {
+  const grade = ep.grade || proj.grade;
+  const pr = state.data.prices[grade];
+  if (proj.mode === '按集') return pr.per_ep;
+  return Math.round(t2sec(ep.duration)/60*pr.per_min*100)/100;
+}
+function allEpisodes() {
+  const list = [];
+  for (const proj of state.data.projects) {
+    for (const [epNo, ep] of Object.entries(proj.episodes)) {
+      list.push({proj, epNo, date: ep.date, duration: ep.duration,
+        sec: t2sec(ep.duration), fee: feeOf(proj, ep),
+        grade: ep.grade || proj.grade, rework: !!ep.rework});
+    }
+  }
+  list.sort((a,b) => a.date.localeCompare(b.date) || a.epNo - b.epNo);
+  return list;
+}
+function periodKey(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  const y = d.getFullYear(), m = d.getMonth(), day = d.getDate();
+  if (state.cycle === 'natural') return `${y}-${String(m+1).padStart(2,'0')}`;
+  if (day <= 15) {
+    const pm = m===0?11:m-1, py = m===0?y-1:y;
+    return `${py}-${String(pm+1).padStart(2,'0')}下/${y}-${String(m+1).padStart(2,'0')}上`;
+  } else {
+    const nm = m===11?0:m+1, ny = m===11?y+1:y;
+    return `${y}-${String(m+1).padStart(2,'0')}下/${ny}-${String(nm+1).padStart(2,'0')}上`;
+  }
+}
+function periodLabel(key) {
+  if (state.cycle === 'natural') {
+    const [y,m] = key.split('-');
+    return `${y}年${parseInt(m)}月`;
+  }
+  // "2026-09下/2026-10上" → "2026-09 下 / 10 上"
+  const parts = key.split('/');
+  const [y1,m1] = parts[0].split(/(?<=下)/);
+  const [y2,m2] = parts[1].split(/(?<=上)/);
+  const second = y1 === y2 ? m2 : parts[1];
+  return `${parts[0].replace('下',' 下 / ')}${second}`;
+}
+
+// ═══════════════════════════════════════════════════════
+// 渲染
+// ═══════════════════════════════════════════════════════
+function calcSummary() {
+  const list = allEpisodes();
+  const eps = list.length;
+  const sec = list.reduce((s,e)=>s+e.sec,0);
+  const fee = list.reduce((s,e)=>s+e.fee,0);
+  return {eps, min: Math.round(sec/60*10)/10, fee: Math.round(fee*100)/100};
+}
+
+function render() {
+  const s = calcSummary();
+  document.getElementById('cardEps').textContent = s.eps;
+  document.getElementById('cardMin').textContent = s.min.toFixed(1);
+  document.getElementById('cardFee').textContent = '¥' + s.fee.toLocaleString('zh-CN',{minimumFractionDigits:2});
+  renderDetail();
+  renderByProject();
+  renderByGrade();
+  updateMonthFilter();
+  updateModeUI();
+  updateSelUI();
+  updateUndoUI();
+  document.body.classList.toggle('del-hover', !!settings.hoverDel);
+}
+
+function updateMonthFilter() {
+  const list = allEpisodes();
+  const periods = [...new Set(list.map(e=>periodKey(e.date)))].sort().reverse();
+  const sel = document.getElementById('monthFilter');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">全部</option>';
+  for (const p of periods) {
+    const opt = document.createElement('option');
+    opt.value = p; opt.textContent = periodLabel(p);
+    sel.appendChild(opt);
+  }
+  sel.value = cur;
+  // 项目筛选下拉
+  const pSel = document.getElementById('projFilter');
+  const pCur = pSel.value;
+  pSel.innerHTML = '<option value="">全部</option>';
+  for (const proj of state.data.projects) {
+    const o = document.createElement('option');
+    o.value = proj.name; o.textContent = proj.name;
+    pSel.appendChild(o);
+  }
+  pSel.value = pCur;
+}
+
+function getFilteredList() {
+  let list = allEpisodes();
+  const mf = document.getElementById('monthFilter').value;
+  const gf = document.getElementById('gradeFilter').value;
+  const pf = document.getElementById('projFilter').value;
+  const df = document.getElementById('modeFilter').value;
+  if (mf) list = list.filter(e => periodKey(e.date) === mf);
+  if (gf) list = list.filter(e => e.proj.grade === gf);
+  if (pf) list = list.filter(e => e.proj.name === pf);
+  if (df) list = list.filter(e => e.proj.mode === df);
+  return list;
+}
+
+function renderDetail() {
+  const list = getFilteredList();
+  const sortMode = document.getElementById('sortMode').value;
+  const box = document.getElementById('view-detail');
+
+  if (sortMode === 'time') {
+    renderCalendar(list, box);
+    return;
+  }
+
+  // ── 按项目：month → project 两级折叠 ──
+  const periodGroups = {};
+  for (const e of list) {
+    const pk = periodKey(e.date);
+    if (!periodGroups[pk]) periodGroups[pk] = {};
+    if (!periodGroups[pk][e.proj.name]) periodGroups[pk][e.proj.name] = [];
+    periodGroups[pk][e.proj.name].push(e);
+  }
+  const pKeys = Object.keys(periodGroups).sort().reverse();
+  box.innerHTML = '';
+  // 全部合计（与当前筛选一致）
+  const gSec = list.reduce((s,e)=>s+e.sec,0);
+  const gFee = list.reduce((s,e)=>s+e.fee,0);
+  const gDiv = document.createElement('div');
+  gDiv.className = 'grand-total';
+  gDiv.innerHTML = `<span class="gt-item">共计 <b>${list.length}</b> 集</span><span class="gt-item">共计时长 <b>${(gSec/60).toFixed(1)}</b> 分</span><span class="gt-item">共计金额 <b>¥${gFee.toLocaleString('zh-CN',{minimumFractionDigits:2})}</b></span>`;
+  box.appendChild(gDiv);
+  const cols = visibleCols(false);
+  for (const pk of pKeys) {
+    const projGroups = periodGroups[pk];
+    const allEps = Object.values(projGroups).flat();
+    const totalSec = allEps.reduce((s,e)=>s+e.sec,0);
+    const totalFee = allEps.reduce((s,e)=>s+e.fee,0);
+    const pCollapsed = state.collapsed['P:'+pk] === true;
+    const pDiv = document.createElement('div');
+    pDiv.className = 'month-group' + (pCollapsed ? ' collapsed' : '');
+    pDiv.innerHTML = `
+      <div class="month-header" onclick="toggleNode('P:${pk}')">
+        <span><span class="toggle">${pCollapsed?'▶':'▼'}</span>${periodLabel(pk)}</span>
+        <span class="stat">${allEps.length} 集 / ${(totalSec/60).toFixed(1)} 分 / ¥${totalFee.toLocaleString('zh-CN',{minimumFractionDigits:2})}</span>
+      </div>
+      <div class="month-body"></div>`;
+    const body = pDiv.querySelector('.month-body');
+
+    // 项目子分组（按最新集日期倒序）
+    const latestDate = arr => arr.map(e=>e.date).sort().reverse()[0] || '';
+    const projEntries = Object.entries(projGroups).sort((a,b)=>
+      latestDate(b[1]).localeCompare(latestDate(a[1])));
+    for (const [projName, eps] of projEntries) {
+      // 集按日期倒序
+      eps.sort((a,b)=> b.date.localeCompare(a.date) || b.epNo - a.epNo);
+      const proj = eps[0].proj;
+      const sec = eps.reduce((s,e)=>s+e.sec,0);
+      const fee = eps.reduce((s,e)=>s+e.fee,0);
+      const cKey = 'X:'+pk+'|'+projName;
+      const xCollapsed = state.collapsed[cKey] === true;
+      const xDiv = document.createElement('div');
+      xDiv.className = 'month-group' + (xCollapsed ? ' collapsed' : '');
+      xDiv.innerHTML = `
+        <div class="month-header" style="border-left-color:var(--accent);background:var(--input)" onclick="toggleNode('${cKey}')">
+          <span><span class="toggle">${xCollapsed?'▶':'▼'}</span>${projName} · ${proj.grade}级 · ${proj.type} · 集号 ${compressEps(eps.map(e=>e.epNo))}</span>
+          <span class="stat">${eps.length}集 / ${(sec/60).toFixed(1)}分 / ¥${fee.toFixed(2)}</span>
+        </div>
+        <div class="month-body">
+          <table>
+            ${epColgroup(cols)}
+            <thead><tr><th></th><th>#</th>${cols.map(k=>`<th>${colLabel(k)}</th>`).join('')}<th>操作</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>`;
+      const tbody = xDiv.querySelector('tbody');
+      eps.forEach((e,i) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = leadCellHtml(e) +
+          `<td>${i+1}</td>` + cols.map(k=>epCellHtml(e,k)).join('') + actionCellHtml(e);
+        tbody.appendChild(tr);
+      });
+      body.appendChild(xDiv);
+    }
+    box.appendChild(pDiv);
+  }
+}
+
+function toggleNode(key) {
+  state.collapsed[key] = !state.collapsed[key];
+  renderDetail();
+}
+
+// 连续集号压缩成范围：[1,3,5,6,7,9] → "1，3，5-7，9"
+function compressEps(epNos) {
+  const nums = Array.from(new Set(epNos.map(Number))).sort((a,b)=>a-b);
+  if (!nums.length) return '';
+  const parts = [];
+  let s = nums[0], pv = nums[0];
+  const flush = () => parts.push(s===pv ? String(s) : s + '-' + pv);
+  for (let i=1;i<nums.length;i++){
+    if (nums[i]===pv+1) pv = nums[i];
+    else { flush(); s = pv = nums[i]; }
+  }
+  flush();
+  return parts.join('，');
+}
+
+// ═══════════════════════════════════════════════════════
+// 列设置（显示/隐藏 + 排序）与全局设置
+// ═══════════════════════════════════════════════════════
+const EP_COLS = [
+  {key:'epNo',     label:'集号'},
+  {key:'proj',     label:'项目'},
+  {key:'grade',    label:'等级'},
+  {key:'type',     label:'类型'},
+  {key:'date',     label:'日期', noCal:true},
+  {key:'duration', label:'时长'},
+  {key:'min',      label:'分钟'},
+  {key:'mode',     label:'计价'},
+  {key:'fee',      label:'金额'},
+];
+const COL_KEY = 'settlement-cols-v1', SET_KEY = 'settlement-settings-v1';
+function loadColCfg() {
+  try {
+    const raw = localStorage.getItem(COL_KEY);
+    if (raw) {
+      const c = JSON.parse(raw);
+      const order = (c.order || []).filter(k => EP_COLS.some(x => x.key === k));
+      for (const col of EP_COLS) if (!order.includes(col.key)) order.push(col.key);
+      return {order, hidden: c.hidden || {}};
+    }
+  } catch(e) {}
+  return {order: EP_COLS.map(c => c.key), hidden: {}};
+}
+function saveColCfg(cfg) { localStorage.setItem(COL_KEY, JSON.stringify(cfg)); }
+function colLabel(k) { const c = EP_COLS.find(x => x.key === k); return c ? c.label : k; }
+function visibleCols(isCal) {
+  const cfg = loadColCfg();
+  return cfg.order.filter(k => !cfg.hidden[k] && !(isCal && (EP_COLS.find(c=>c.key===k)||{}).noCal));
+}
+function epColgroup(cols) {
+  const w = Math.floor(82 / Math.max(cols.length, 1));
+  return '<colgroup><col style="width:4%"><col style="width:5%">'
+    + cols.map(() => `<col style="width:${w}%">`).join('')
+    + '<col style="width:9%"></colgroup>';
+}
+function epCellHtml(e, key) {
+  const rw = e.rework ? ' <span style="background:var(--accent);color:#fff;padding:1px 5px;border-radius:3px;font-size:10px">重混</span>' : '';
+  switch(key) {
+    case 'epNo':     return `<td>EP${e.epNo}</td>`;
+    case 'proj':     return `<td class="l">${e.proj.name}${rw}</td>`;
+    case 'grade':    return `<td>${e.proj.grade}</td>`;
+    case 'type':     return `<td>${e.proj.type}</td>`;
+    case 'date':     return `<td>${e.date}</td>`;
+    case 'duration': return `<td>${e.duration}</td>`;
+    case 'min':      return `<td>${(e.sec/60).toFixed(2)}</td>`;
+    case 'mode':     return `<td>${e.proj.mode}</td>`;
+    case 'fee':      return `<td class="r">¥${e.fee.toFixed(2)}</td>`;
+  }
+  return '<td></td>';
+}
+function loadSettings() {
+  const d = {confirmDel:true, hoverDel:false, defaultSort:'project', weekStart:'mon', delMode:false, hideEmpty:false, freezeRows:1, freezeCols:0, theme:''};
+  try { return Object.assign(d, JSON.parse(localStorage.getItem(SET_KEY) || '{}')); } catch(e) { return d; }
+}
+function saveSettings(s) { localStorage.setItem(SET_KEY, JSON.stringify(s)); }
+let settings = loadSettings();
+
+// ── 安全转义：项目名可能含单/双引号，不能直接拼进 onclick / 属性 ──
+function jsStr(s) { return JSON.stringify(String(s)).replace(/"/g, '&quot;'); }
+function attrStr(s) { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+
+// ── 选择 / 删除 模式（同一列：勾选框 ↔ 红色删除符） ──
+function toggleDelMode() {
+  settings.delMode = !settings.delMode;
+  saveSettings(settings); render();
+  toast(settings.delMode ? '删除模式：点红色 ✕ 直接删除' : '选择模式：勾选后可批量删除');
+}
+function updateModeUI() {
+  const b = document.getElementById('modeToggle');
+  if (b) {
+    b.textContent = settings.delMode ? '✕ 删除模式' : '☑ 选择模式';
+    b.className = settings.delMode ? 'btn danger' : 'btn secondary';
+  }
+  const w = document.getElementById('selWrap');
+  if (w) w.style.display = settings.delMode ? 'none' : 'inline-flex';
+}
+function leadCellHtml(e) {
+  if (settings.delMode) {
+    return `<td><button class="btn-del-red" title="删除该集" onclick="delEp(${jsStr(e.proj.name)},${e.epNo})">✕</button></td>`;
+  }
+  return `<td><input type="checkbox" class="epchk" data-p="${attrStr(e.proj.name)}" data-e="${e.epNo}" onchange="updateSelUI()"></td>`;
+}
+// 操作列只放编辑；删除统一走首列（选择模式勾选批量删 / 删除模式红色 ✕）
+function actionCellHtml(e) {
+  return `<td><button class="btn-edit" title="编辑该集" onclick="openEditEp(${jsStr(e.proj.name)},${e.epNo})">✎</button></td>`;
+}
+
+// ── 撤销 ──
+let undoStack = [];
+function snapshotDel(pairs) {
+  const items = [];
+  for (const [p, no] of pairs) {
+    const proj = state.data.projects.find(x => x.name === p);
+    if (proj && proj.episodes[no]) items.push({p, no, ep: JSON.parse(JSON.stringify(proj.episodes[no]))});
+  }
+  if (items.length) { undoStack.push(items); updateUndoUI(); }
+}
+function updateUndoUI() {
+  const b = document.getElementById('undoBtn');
+  if (!b) return;
+  if (undoStack.length) { b.style.display = 'inline-block'; b.textContent = `↩ 撤销（${undoStack.length}）`; }
+  else b.style.display = 'none';
+}
+function undoDelete() {
+  const items = undoStack.pop();
+  if (!items) return;
+  for (const it of items) {
+    let p = state.data.projects.find(x => x.name === it.p);
+    if (!p) { p = {name: it.p, grade: 'C', type: '正式', mode: '按集', path: '', episodes: {}}; state.data.projects.push(p); }
+    p.episodes[it.no] = it.ep;
+  }
+  saveData(); render(); toast(`已恢复 ${items.length} 集`);
+}
+
+// ── 编辑已登记的集 ──
+function openEditEp(projName, epNo) {
+  const p = state.data.projects.find(x => x.name === projName);
+  if (!p || !p.episodes[epNo]) return;
+  const ep = p.episodes[epNo];
+  const g = ep.grade || p.grade;
+  const grades = ['A','B','C','D'].map(x => `<option ${g===x?'selected':''}>${x}</option>`).join('');
+  openModal(`<h2>编辑 ${projName} · EP${epNo}</h2>
+    <div class="form-row"><label>日期</label><input id="e_date" type="date" value="${ep.date}"></div>
+    <div class="form-row"><label>时长</label><input id="e_dur" value="${ep.duration}"></div>
+    <div class="form-row"><label>等级</label><select id="e_grade" style="flex:1;padding:6px 8px;border:1px solid var(--line);border-radius:4px">${grades}</select></div>
+    <div class="form-row"><label>重混</label><input type="checkbox" id="e_rework" ${ep.rework?'checked':''}></div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeModal()">取消</button>
+      <button class="btn" onclick="saveEditEp(${jsStr(projName)},${epNo})">保存</button>
+    </div>`);
+}
+function saveEditEp(projName, epNo) {
+  const p = state.data.projects.find(x => x.name === projName);
+  if (!p || !p.episodes[epNo]) { closeModal(); return; }
+  const dur = document.getElementById('e_dur').value.trim();
+  if (!/^\d{2}:\d{2}:\d{2}$/.test(dur)) { toast('时长格式 HH:MM:SS'); return; }
+  const date = document.getElementById('e_date').value;
+  if (!date) { toast('请选择日期'); return; }
+  p.episodes[epNo].date = date;
+  p.episodes[epNo].duration = dur;
+  p.episodes[epNo].grade = document.getElementById('e_grade').value;
+  p.episodes[epNo].rework = document.getElementById('e_rework').checked;
+  saveData(); closeModal(); render(); toast('已保存');
+}
+
+// ── 设置弹窗 ──
+function openSettings() {
+  const cfg = loadColCfg();
+  let h = '<h2>设置</h2>';
+  h += '<h3 style="font-size:13px;color:var(--main);margin:10px 0 6px">列设置（勾选＝显示 · ↑↓ 调整顺序）</h3>';
+  cfg.order.forEach((k, idx) => {
+    const on = !cfg.hidden[k];
+    h += `<div style="display:flex;align-items:center;gap:8px;padding:3px 0">
+      <input type="checkbox" ${on ? 'checked' : ''} onchange="setCol('${k}', this.checked)">
+      <span style="width:70px;font-size:13px">${colLabel(k)}</span>
+      <button class="btn secondary" style="padding:2px 7px;font-size:12px" onclick="moveCol('${k}',-1)" ${idx===0?'disabled':''}>↑</button>
+      <button class="btn secondary" style="padding:2px 7px;font-size:12px" onclick="moveCol('${k}',1)" ${idx===cfg.order.length-1?'disabled':''}>↓</button>
+    </div>`;
+  });
+  h += '<h3 style="font-size:13px;color:var(--main);margin:14px 0 6px">删除安全</h3>';
+  h += `<div class="form-row"><label style="width:auto;text-align:left"><input type="checkbox" id="setConfirm" ${settings.confirmDel?'checked':''}> 删除时弹确认框</label></div>`;
+  h += '<h3 style="font-size:13px;color:var(--main);margin:14px 0 6px">默认视图</h3>';
+  h += `<div class="form-row"><label style="width:70px">默认排序</label><select id="setSort" style="flex:1;padding:5px;border:1px solid var(--line);border-radius:4px">
+    <option value="project" ${settings.defaultSort==='project'?'selected':''}>按项目</option>
+    <option value="time" ${settings.defaultSort==='time'?'selected':''}>按时间（日历）</option></select></div>`;
+  h += `<div class="form-row"><label style="width:70px">每周起始</label><select id="setWeek" style="flex:1;padding:5px;border:1px solid var(--line);border-radius:4px">
+    <option value="mon" ${settings.weekStart==='mon'?'selected':''}>周一</option>
+    <option value="sun" ${settings.weekStart==='sun'?'selected':''}>周日</option></select></div>`;
+  h += `<div class="form-row"><label style="width:auto;text-align:left"><input type="checkbox" id="setHideEmpty" ${settings.hideEmpty?'checked':''}> 「按项目」页隐藏 0 集项目（无筛选时）</label></div>`;
+  h += '<h3 style="font-size:13px;color:var(--main);margin:14px 0 6px">外观</h3>';
+  h += `<div class="form-row"><label style="width:70px">主题</label><select id="setTheme" style="flex:1;padding:5px;border:1px solid var(--line);border-radius:4px">`
+    + THEMES.map(t => `<option value="${t.v}" ${(settings.theme||'')===t.v?'selected':''}>${t.n}</option>`).join('')
+    + `</select></div>`;
+  h += '<h3 style="font-size:13px;color:var(--main);margin:14px 0 6px">导出 Excel · 冻结窗格范围</h3>';
+  h += `<div class="form-row"><label style="width:80px">冻结上方</label><input id="setFRows" type="number" min="0" max="20" value="${settings.freezeRows}" style="width:70px;padding:5px;border:1px solid var(--line);border-radius:4px"> 行</div>`;
+  h += `<div class="form-row"><label style="width:80px">冻结左侧</label><input id="setFCols" type="number" min="0" max="20" value="${settings.freezeCols}" style="width:70px;padding:5px;border:1px solid var(--line);border-radius:4px"> 列</div>`;
+  h += '<p style="font-size:11px;color:var(--muted);padding:0 2px">作用于导出的全部工作表。填 1 行＝冻结表头；同时填列＝连左侧列一起冻结。</p>';
+  h += '<div class="modal-actions">';
+  h += '<button class="btn secondary" onclick="exportJSON()">备份 JSON</button>';
+  h += `<button class="btn secondary" onclick="document.getElementById('importFile').click()">恢复 JSON</button>`;
+  h += '<button class="btn" onclick="saveSettingsFromModal()">保存</button>';
+  h += '</div>';
+  openModal(h);
+}
+function setCol(k, on) {
+  const cfg = loadColCfg();
+  if (on) delete cfg.hidden[k]; else cfg.hidden[k] = true;
+  saveColCfg(cfg); openSettings(); render();
+}
+function moveCol(k, dir) {
+  const cfg = loadColCfg();
+  const i = cfg.order.indexOf(k), j = i + dir;
+  if (i < 0 || j < 0 || j >= cfg.order.length) return;
+  cfg.order[i] = cfg.order[j]; cfg.order[j] = k;
+  saveColCfg(cfg); openSettings(); render();
+}
+function saveSettingsFromModal() {
+  settings.confirmDel = document.getElementById('setConfirm').checked;
+  settings.defaultSort = document.getElementById('setSort').value;
+  settings.weekStart = document.getElementById('setWeek').value;
+  settings.hideEmpty = document.getElementById('setHideEmpty').checked;
+  settings.freezeRows = Math.max(0, parseInt(document.getElementById('setFRows').value) || 0);
+  settings.freezeCols = Math.max(0, parseInt(document.getElementById('setFCols').value) || 0);
+  settings.theme = document.getElementById('setTheme').value || '';
+  saveSettings(settings);
+  document.documentElement.setAttribute('data-theme', settings.theme);
+  closeModal(); render(); toast('设置已保存');
+}
+function updateSelUI() {
+  const n = document.querySelectorAll('#view-detail .epchk:checked').length;
+  const btn = document.getElementById('batchDelBtn'), cnt = document.getElementById('selCount');
+  if (cnt) cnt.textContent = n;
+  if (btn) btn.style.display = n ? 'inline-block' : 'none';
+}
+
+// ── 日历视图 ──
+function renderCalendar(list, box) {
+  // 按日分组
+  const byDay = {};
+  for (const e of list) {
+    if (!byDay[e.date]) byDay[e.date] = [];
+    byDay[e.date].push(e);
+  }
+  // 默认显示最新有数据的月，并选中最新一天
+  if (!state.calYear) {
+    const dates = Object.keys(byDay).sort();
+    const latest = dates[dates.length-1] || new Date().toISOString().slice(0,10);
+    const d = new Date(latest + 'T00:00:00');
+    state.calYear = d.getFullYear();
+    state.calMonth = d.getMonth();
+    state.selectedDate = latest;
+  }
+  const y = state.calYear, m = state.calMonth;
+  const today = new Date().toISOString().slice(0,10);
+
+  let html = '<div class="cal-nav">';
+  html += `<button onclick="calNav(-1)">‹ 上月</button>`;
+  html += `<span class="cal-title">${y}年${m+1}月</span>`;
+  html += `<button onclick="calNav(1)">下月 ›</button>`;
+  html += '</div>';
+  const dowNames = settings.weekStart === 'sun'
+    ? ['日','一','二','三','四','五','六']
+    : ['一','二','三','四','五','六','日'];
+  html += '<div class="cal-dow-header">' + dowNames.map(d => `<span>${d}</span>`).join('') + '</div>';
+  html += '<div class="cal-grid">';
+
+  const firstDay = new Date(y, m, 1);
+  // 周一起始
+  let startOffset = settings.weekStart === 'sun' ? firstDay.getDay() : (firstDay.getDay() + 6) % 7;
+  const daysInMonth = new Date(y, m+1, 0).getDate();
+  for (let i=0; i<startOffset; i++) html += '<div class="cal-cell empty"></div>';
+  for (let d=1; d<=daysInMonth; d++) {
+    const ds = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const dayEps = byDay[ds] || [];
+    const n = dayEps.length;
+    const fee = dayEps.reduce((s,e)=>s+e.fee,0);
+    const cls = ['cal-cell'];
+    if (!n) cls.push('empty');
+    if (ds === today) cls.push('today');
+    if (ds === state.selectedDate) cls.push('selected');
+    html += `<div class="${cls.join(' ')}" onclick="selectDay('${ds}')">`;
+    html += `<div class="dow">${d}</div>`;
+    if (n) {
+      const bp = {};
+      for (const x of dayEps) {
+        if(!bp[x.proj.name]) bp[x.proj.name]=[];
+        bp[x.proj.name].push(x.epNo);
+      }
+      const pn = Object.keys(bp);
+      const lines = pn.map(z => z + '：' + compressEps(bp[z]));
+      html += `<div class="eplist">${lines.join('<br>')}</div>`;
+      html += `<div class="cellfoot"><span class="count">${n}集</span><span class="fee">¥${fee.toFixed(0)}</span></div>`;
+    }
+    html += '</div>';
+  }
+  html += '</div>';
+
+  // 选中日明细
+  if (state.selectedDate && byDay[state.selectedDate]) {
+    const eps = byDay[state.selectedDate];
+    const sec = eps.reduce((s,e)=>s+e.sec,0);
+    const fee = eps.reduce((s,e)=>s+e.fee,0);
+    const wd = ['日','一','二','三','四','五','六'][new Date(state.selectedDate+'T00:00:00').getDay()];
+    html += `<h3 style="margin:10px 0;color:var(--main)">${state.selectedDate} 周${wd} · ${eps.length}集 / ${(sec/60).toFixed(1)}分 / ¥${fee.toFixed(2)}</h3>`;
+    const ccols = visibleCols(true);
+    html += `<table>${epColgroup(ccols)}`;
+    html += '<thead><tr><th></th><th>#</th>' + ccols.map(k => `<th>${colLabel(k)}</th>`).join('') + '<th>操作</th></tr></thead><tbody>';
+    eps.forEach((e,i) => {
+      html += `<tr>` + leadCellHtml(e) +
+        `<td>${i+1}</td>` + ccols.map(k => epCellHtml(e,k)).join('') + actionCellHtml(e) + `</tr>`;
+    });
+    html += '</tbody></table>';
+  } else if (state.selectedDate) {
+    html += `<p style="padding:16px;color:var(--muted)">${state.selectedDate} 无工作记录</p>`;
+  }
+  box.innerHTML = html;
+}
+function calNav(dir) {
+  state.calMonth += dir;
+  if (state.calMonth < 0) { state.calMonth = 11; state.calYear--; }
+  if (state.calMonth > 11) { state.calMonth = 0; state.calYear++; }
+  renderDetail();
+}
+function selectDay(ds) {
+  state.selectedDate = ds;
+  renderDetail();
+}
+
+// 「按项目」页也按筛选栏过滤（月/等级/项目/计价）
+function projEpsFiltered(p) {
+  const mf = document.getElementById('monthFilter').value;
+  const gf = document.getElementById('gradeFilter').value;
+  const pf = document.getElementById('projFilter').value;
+  const df = document.getElementById('modeFilter').value;
+  if (pf && p.name !== pf) return [];
+  if (df && p.mode !== df) return [];
+  let eps = Object.entries(p.episodes);
+  if (gf) eps = eps.filter(([,e]) => (e.grade || p.grade) === gf);
+  if (mf) eps = eps.filter(([,e]) => periodKey(e.date) === mf);
+  return eps;
+}
+function renderByProject() {
+  const box = document.getElementById('view-byProject');
+  let html = '<table><colgroup><col style="width:11%"><col style="width:5%"><col style="width:6%"><col style="width:5%"><col style="width:30%"><col style="width:9%"><col style="width:8%"><col style="width:9%"><col style="width:17%"></colgroup>';
+  html += '<thead><tr><th>项目</th><th>等级</th><th>类型</th><th>集数</th><th>集号明细</th><th>时长(分)</th><th>平均</th><th>费用(元)</th><th>操作</th></tr></thead><tbody>';
+  const mf0 = document.getElementById('monthFilter').value;
+  const gf0 = document.getElementById('gradeFilter').value;
+  const pf0 = document.getElementById('projFilter').value;
+  const df0 = document.getElementById('modeFilter').value;
+  const hasFilter = !!(mf0 || gf0 || pf0 || df0);
+  for (const p of state.data.projects) {
+    const eps = projEpsFiltered(p);
+    if (!eps.length && (settings.hideEmpty || hasFilter)) continue;
+    const sec = eps.reduce((s,[,e])=>s+t2sec(e.duration),0);
+    const fee = eps.reduce((s,[,e])=>s+feeOf(p,e),0);
+    const n = eps.length;
+    const allNos = eps.map(([no])=>no);
+    const rwNos = eps.filter(([,e])=>e.rework).map(([no])=>no);
+    let detail = n ? compressEps(allNos) : '—';
+    if (rwNos.length) {
+      detail += `<div style="color:var(--accent);margin-top:2px">重混：${compressEps(rwNos)}</div>`;
+    }
+    html += `<tr><td class="l">${p.name}</td><td>${p.grade}</td><td>${p.type}</td>
+      <td>${n}</td><td class="l" style="font-size:11px;line-height:1.4">${detail}</td>
+      <td>${(sec/60).toFixed(1)}</td>
+      <td>${n?(sec/60/n).toFixed(2):'—'}</td>
+      <td class="r">¥${fee.toFixed(2)}</td>
+      <td><button class="btn secondary" style="padding:2px 8px;font-size:11px" onclick="delProject(${jsStr(p.name)})">删项目</button></td></tr>`;
+  }
+  html += '</tbody></table>';
+  box.innerHTML = html;
+}
+
+function renderByGrade() {
+  const box = document.getElementById('view-byGrade');
+  const list = allEpisodes();
+  const byGrade = {};
+  for (const g of ['A','B','C','D']) byGrade[g] = {eps:0, sec:0, fee:0};
+  for (const e of list) {
+    byGrade[e.grade].eps++;
+    byGrade[e.grade].sec += e.sec;
+    byGrade[e.grade].fee += e.fee;
+  }
+  let html = '<table><colgroup><col style="width:12%"><col style="width:12%"><col style="width:16%"><col style="width:16%"><col style="width:16%"><col style="width:16%"></colgroup>';
+  html += '<thead><tr><th>等级</th><th>集数</th><th>时长(分)</th><th>平均(分/集)</th><th>单价(分)</th><th>费用(元)</th></tr></thead><tbody>';
+  let tEps=0,tSec=0,tFee=0;
+  for (const g of ['A','B','C','D']) {
+    const d = byGrade[g];
+    tEps+=d.eps; tSec+=d.sec; tFee+=d.fee;
+    html += `<tr><td>${g}</td><td>${d.eps}</td><td>${(d.sec/60).toFixed(1)}</td>
+      <td>${d.eps?(d.sec/60/d.eps).toFixed(2):'—'}</td>
+      <td>${state.data.prices[g].per_min}</td>
+      <td class="r">¥${d.fee.toFixed(2)}</td></tr>`;
+  }
+  html += `<tr class="grand"><td>合计</td><td>${tEps}</td><td>${(tSec/60).toFixed(1)}</td><td>${tEps?(tSec/60/tEps).toFixed(2):'—'}</td><td>—</td><td class="r">¥${tFee.toFixed(2)}</td></tr>`;
+  html += '</tbody></table>';
+  box.innerHTML = html;
+}
+
+function switchTab(v) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.view===v));
+  document.querySelectorAll('.view').forEach(vw => vw.classList.remove('active'));
+  document.getElementById('view-'+v).classList.add('active');
+  document.getElementById('filterBar').style.display = (v==='detail' || v==='byProject') ? 'flex' : 'none';
+}
+
+// ═══════════════════════════════════════════════════════
+// 删除
+// ═══════════════════════════════════════════════════════
+function delEp(projName, epNo) {
+  if (settings.confirmDel && !confirm(`删除 ${projName} 第 ${epNo} 集？`)) return;
+  const p = state.data.projects.find(x=>x.name===projName);
+  if (p) { snapshotDel([[projName, epNo]]); delete p.episodes[epNo]; saveData(); render(); }
+}
+function delProject(name) {
+  if (!confirm(`删除项目「${name}」及其全部集数？`)) return;
+  state.data.projects = state.data.projects.filter(x=>x.name!==name);
+  saveData(); render();
+}
+
+// 全选 / 批量删除（仅月度明细视角的集级勾选生效）
+function toggleSelAll(cb) {
+  document.querySelectorAll('#view-detail .epchk').forEach(x => x.checked = cb.checked);
+  updateSelUI();
+}
+function batchDeleteEps() {
+  const boxes = [...document.querySelectorAll('#view-detail .epchk:checked')];
+  if (!boxes.length) { toast('请先在月度明细勾选要删除的集'); return; }
+  if (settings.confirmDel && !confirm(`确认删除选中的 ${boxes.length} 集？此操作不可撤销`)) return;
+  const byProj = {};
+  for (const b of boxes) {
+    const p = b.dataset.p;
+    if (!byProj[p]) byProj[p] = [];
+    byProj[p].push(b.dataset.e);
+  }
+  snapshotDel(boxes.map(b => [b.dataset.p, b.dataset.e]));
+  for (const [p, nos] of Object.entries(byProj)) {
+    const proj = state.data.projects.find(x=>x.name===p);
+    if (proj) for (const no of nos) delete proj.episodes[no];
+  }
+  saveData(); render();
+  const sa = document.getElementById('selAll'); if (sa) sa.checked = false;
+  toast(`已删除 ${boxes.length} 集`);
+}
+
+// ═══════════════════════════════════════════════════════
+// 弹窗
+// ═══════════════════════════════════════════════════════
+function openModal(html) {
+  document.getElementById('modalBox').innerHTML = html;
+  document.getElementById('modalMask').classList.add('show');
+}
+function closeModal() {
+  document.getElementById('modalMask').classList.remove('show');
+}
+document.getElementById('modalMask').addEventListener('click', e => {
+  if (e.target.id === 'modalMask') closeModal();
+});
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2000);
+}
+
+function projectOptions(sel) {
+  return state.data.projects.map((p,i)=>`<option value="${p.name}" ${i===sel?'selected':''}>${p.name}</option>`).join('');
+}
+
+// ── 登记单集 ──
+function openAddEp() {
+  const today = new Date().toISOString().slice(0,10);
+  openModal(`
+    <h2>登记新集</h2>
+    <div class="form-row"><label>项目</label><select id="f_proj">${projectOptions(0)}</select></div>
+    <div class="form-row"><label>集号</label><input id="f_ep" placeholder="如 5"></div>
+    <div class="form-row"><label>日期</label><input id="f_date" value="${today}"></div>
+    <div class="form-row"><label>时长</label><input id="f_dur" value="00:00:00">
+      <button class="btn secondary" onclick="pickWav()">选wav</button></div>
+    <div class="form-row"><label>计价方式</label><select id="f_mode"><option selected>按集</option><option>按时长</option></select></div>
+    <div class="form-row"><label>标记</label><label style="width:auto;flex:none"><input type="checkbox" id="f_rework"> 重混（待确认是否计费）</label></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="saveEp()">保存</button>
+      <button class="btn secondary" onclick="closeModal()">取消</button>
+    </div>`);
+}
+function pickWav() {
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = '.wav';
+  inp.onchange = () => {
+    const f = inp.files[0]; if (!f) return;
+    const ctx = new (window.AudioContext||window.webkitAudioContext)();
+    const rdr = new FileReader();
+    rdr.onload = async () => {
+      const buf = await ctx.decodeAudioData(rdr.result);
+      document.getElementById('f_dur').value = sec2str(buf.duration);
+      ctx.close();
+    };
+    rdr.readAsArrayBuffer(f);
+  };
+  inp.click();
+}
+function saveEp() {
+  const p = state.data.projects.find(x=>x.name===document.getElementById('f_proj').value);
+  const ep = document.getElementById('f_ep').value.trim();
+  const date = document.getElementById('f_date').value.trim();
+  const dur = document.getElementById('f_dur').value.trim();
+  const mode = document.getElementById('f_mode').value;
+  if (!ep || isNaN(Number(ep))) return toast('集号必须是数字');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return toast('日期格式 YYYY-MM-DD');
+  if (!/^\d{2}:\d{2}:\d{2}$/.test(dur)) return toast('时长格式 HH:MM:SS');
+  p.episodes[ep] = {date, duration: dur, rework: document.getElementById('f_rework').checked};
+  p.mode = mode;
+  saveData(); closeModal(); render();
+  toast(`已登记 ${p.name} 第 ${ep} 集`);
+}
+
+// ── 批量登记 ──
+function openBatch() {
+  const today = new Date().toISOString().slice(0,10);
+  openModal(`
+    <h2>批量登记集数</h2>
+    <div class="form-row"><label>项目</label><select id="b_proj">${projectOptions(0)}</select></div>
+    <div class="form-row"><label>集号区间</label><input id="b_range" placeholder="如 17-24"></div>
+    <div class="form-row"><label>日期</label><input id="b_date" value="${today}"></div>
+    <div class="form-row"><label>默认时长</label><input id="b_dur" value="00:01:30"></div>
+    <div class="form-row"><label>计价方式</label><select id="b_mode"><option selected>按集</option><option>按时长</option></select></div>
+    <p style="font-size:12px;color:var(--muted);padding:0 10px">批量建好后可在明细里逐集改时长，或拖 wav 自动读。</p>
+    <div class="modal-actions">
+      <button class="btn" onclick="saveBatch()">生成</button>
+      <button class="btn secondary" onclick="closeModal()">取消</button>
+    </div>`);
+}
+function saveBatch() {
+  const p = state.data.projects.find(x=>x.name===document.getElementById('b_proj').value);
+  const range = document.getElementById('b_range').value.trim();
+  const date = document.getElementById('b_date').value.trim();
+  const dur = document.getElementById('b_dur').value.trim();
+  const mode = document.getElementById('b_mode').value;
+  const m = range.match(/^(\d+)\s*[-~到]\s*(\d+)$/);
+  if (!m) return toast('区间格式如 17-24');
+  const [,a,b] = m.map(Number);
+  if (a>b) return toast('起始集号不能大于结束');
+  for (let i=a;i<=b;i++) {
+    p.episodes[String(i)] = {date, duration: dur};
+  }
+  p.mode = mode;
+  saveData(); closeModal(); render();
+  toast(`已生成第 ${a}~${b} 集（共 ${b-a+1} 集）`);
+}
+
+// ── 新增项目 ──
+function openAddProject() {
+  openModal(`
+    <h2>新增项目</h2>
+    <div class="form-row"><label>项目名</label><input id="np_name" placeholder="如 誓言"></div>
+    <div class="form-row"><label>等级</label><select id="np_grade"><option>A</option><option>B</option><option selected>C</option><option>D</option></select></div>
+    <div class="form-row"><label>类型</label><select id="np_type"><option selected>正式</option><option>Demo</option></select></div>
+    <div class="form-row"><label>交付路径</label><input id="np_path"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="saveProject()">保存</button>
+      <button class="btn secondary" onclick="closeModal()">取消</button>
+    </div>`);
+}
+function saveProject() {
+  const name = document.getElementById('np_name').value.trim();
+  if (!name) return toast('请填项目名');
+  if (state.data.projects.find(p=>p.name===name)) return toast('项目已存在');
+  state.data.projects.push({
+    name, grade: document.getElementById('np_grade').value,
+    type: document.getElementById('np_type').value, mode: '按时长',
+    path: document.getElementById('np_path').value.trim(), episodes: {}
+  });
+  saveData(); closeModal(); render();
+  toast(`已新增项目「${name}」`);
+}
+
+// ── 改单价 ──
+function openPrices() {
+  const ps = state.data.prices;
+  let rows = '';
+  for (const g of ['A','B','C','D']) {
+    rows += `<div class="form-row"><label>${g} 级</label>
+      <input id="p_${g}_min" value="${ps[g].per_min}" style="width:80px">
+      <span style="font-size:12px;color:var(--muted)">元/分</span>
+      <input id="p_${g}_ep" value="${ps[g].per_ep}" style="width:80px">
+      <span style="font-size:12px;color:var(--muted)">元/集</span></div>`;
+  }
+  openModal(`<h2>修改单价</h2>${rows}
+    <div class="modal-actions">
+      <button class="btn" onclick="savePrices()">保存</button>
+      <button class="btn secondary" onclick="closeModal()">取消</button>
+    </div>`);
+}
+function savePrices() {
+  for (const g of ['A','B','C','D']) {
+    state.data.prices[g].per_min = parseFloat(document.getElementById(`p_${g}_min`).value);
+    state.data.prices[g].per_ep = parseFloat(document.getElementById(`p_${g}_ep`).value);
+  }
+  saveData(); closeModal(); render();
+  toast('单价已更新');
+}
+
+// ═══════════════════════════════════════════════════════
+// 拖拽文件夹读 wav
+// ═══════════════════════════════════════════════════════
+const dz = document.getElementById('dropZone');
+let suppressClickUntil = 0;
+
+// 拖拽视觉
+['dragenter','dragover'].forEach(ev => dz.addEventListener(ev, e => {
+  e.preventDefault(); e.stopPropagation();
+  dz.classList.add('dragover');
+}));
+dz.addEventListener('dragleave', e => {
+  e.preventDefault(); e.stopPropagation();
+  dz.classList.remove('dragover');
+});
+// 全窗口防止浏览器打开文件
+window.addEventListener('dragover', e => e.preventDefault());
+window.addEventListener('drop', e => e.preventDefault());
+
+// 点击选择文件夹（但拖拽释放后的误触发 click 要忽略）
+dz.addEventListener('click', e => {
+  if (Date.now() < suppressClickUntil) return;
+  document.getElementById('folderInput').click();
+});
+
+// 解析文件名 → parsed 对象
+function scanFiles(fileList) {
+  const wavFiles = [];
+  for (const f of fileList)
+    if (f.name && f.name.toLowerCase().endsWith('.wav')) wavFiles.push(f);
+  const parsed = {};
+  let unrecognized = 0;
+  for (const f of wavFiles) {
+    let m = f.name.match(/(\d+)集\s+(\d{4})\s+[vV](\d+)/);
+    if (m) {
+      const ep = m[1], mmdd = m[2], ver = parseInt(m[3]);
+      if (!parsed[ep]) parsed[ep] = { file: f, mmdd, ver, rework: false };
+      else {
+        parsed[ep].rework = true;
+        if (ver > parsed[ep].ver) parsed[ep] = { file: f, mmdd, ver, rework: true };
+      }
+    } else {
+      m = f.name.match(/(\d+)\s*集/);
+      if (m) {
+        const ep = m[1];
+        if (!parsed[ep]) parsed[ep] = { file: f, mmdd: null, ver: 0, rework: false };
+      } else unrecognized++;
+    }
+  }
+  return { parsed, unrecognized, wavCount: wavFiles.length };
+}
+
+// 弹出导入设置对话框
+function showImportModal(scan) {
+  const { parsed, unrecognized } = scan;
+  const epNos = Object.keys(parsed).sort((a,b)=>a-b);
+  if (!epNos.length) { toast('文件名未识别集号（需含"X集"）'); return; }
+  const reworkCount = epNos.filter(n=>parsed[n].rework).length;
+  const lastProj = state.data.projects[state.data.projects.length-1];
+  const projDatalist = state.data.projects.map(p=>`<option value="${p.name}">`).join('');
+
+  const html = `
+    <h2>导入设置 · 识别到 ${epNos.length} 集（${epNos[0]}~${epNos[epNos.length-1]}）</h2>
+    ${reworkCount ? `<p style="color:var(--accent);font-size:12px">${reworkCount} 集检测到多版本，已自动标重混</p>` : ''}
+    ${unrecognized ? `<p style="color:var(--danger);font-size:12px">${unrecognized} 个文件未识别</p>` : ''}
+    <div class="form-row"><label>项目名</label>
+      <input list="projDatalist" id="im_proj" value="${lastProj.name}">
+      <datalist id="projDatalist">${projDatalist}</datalist>
+    </div>
+    <p style="font-size:11px;color:var(--muted);margin:2px 0 8px 88px">输入新项目名会自动创建</p>
+    <div class="form-row"><label>等级模式</label>
+      <label style="width:auto;flex:none"><input type="radio" name="im_gmode" value="uniform" checked onchange="toggleLadder()"> 统一等级</label>
+      <label style="width:auto;flex:none;margin-left:12px"><input type="radio" name="im_gmode" value="ladder" onchange="toggleLadder()"> 阶梯等级</label>
+    </div>
+    <div id="uniformBox">
+      <div class="form-row"><label>项目等级</label>
+        <select id="im_grade"><option>A</option><option>B</option><option>C</option><option selected>D</option></select></div>
+      <div class="form-row"><label>类型</label>
+        <select id="im_type"><option selected>正式</option><option>Demo</option></select></div>
+    </div>
+    <div id="ladderBox" style="display:none">
+      <p style="font-size:12px;color:var(--muted)">为不同集号范围指定等级，未覆盖的集用默认等级</p>
+      <div class="form-row"><label>默认等级</label>
+        <select id="im_defgrade"><option>A</option><option>B</option><option selected>C</option><option>D</option></select></div>
+      <div class="form-row"><label>类型</label>
+        <select id="im_ltype"><option selected>正式</option><option>Demo</option></select></div>
+      <div class="form-row"><label>添加规则</label>
+        <input id="im_range" placeholder="集号范围，如 1 或 2-5" style="width:140px">
+        <select id="im_rgrade" style="width:60px"><option>A</option><option>B</option><option>C</option><option>D</option></select>
+        <button class="btn" style="padding:5px 10px" onclick="addLadderRule()">添加</button>
+      </div>
+      <div id="ladderRules" style="margin-left:88px;font-size:12px"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">取消</button>
+      <button class="btn primary" onclick="confirmImport()">确认导入</button>
+    </div>`;
+  openModal(html);
+  window._importScan = scan;
+  window._ladderRules = [];
+}
+
+function toggleLadder() {
+  const mode = document.querySelector('input[name="im_gmode"]:checked').value;
+  document.getElementById('uniformBox').style.display = mode==='uniform' ? '' : 'none';
+  document.getElementById('ladderBox').style.display = mode==='ladder' ? '' : 'none';
+}
+function addLadderRule() {
+  const range = document.getElementById('im_range').value.trim();
+  const grade = document.getElementById('im_rgrade').value;
+  let lo, hi;
+  if (range.includes('-')) {
+    const parts = range.split('-');
+    lo = parseInt(parts[0]); hi = parseInt(parts[1]);
+  } else { lo = hi = parseInt(range); }
+  if (isNaN(lo) || isNaN(hi)) { toast('范围格式不对，如 1 或 2-5'); return; }
+  window._ladderRules.push({lo, hi, grade});
+  document.getElementById('im_range').value = '';
+  renderLadderRules();
+}
+function renderLadderRules() {
+  const box = document.getElementById('ladderRules');
+  box.innerHTML = window._ladderRules.map((r,i)=>
+    `<div style="padding:3px 0">${r.lo===r.hi?r.lo:r.lo+'-'+r.hi} 集 = ${r.grade}级
+      <span style="color:var(--danger);cursor:pointer;margin-left:8px" onclick="removeLadderRule(${i})">删除</span></div>`
+  ).join('');
+}
+function removeLadderRule(i) {
+  window._ladderRules.splice(i,1);
+  renderLadderRules();
+}
+function gradeForEp(epNo, defGrade) {
+  const n = parseInt(epNo);
+  for (const r of window._ladderRules)
+    if (n >= r.lo && n <= r.hi) return r.grade;
+  return defGrade;
+}
+
+async function confirmImport() {
+  const scan = window._importScan;
+  const { parsed } = scan;
+  const epNos = Object.keys(parsed).sort((a,b)=>a-b);
+  let projName = document.getElementById('im_proj').value.trim();
+  if (!projName) { toast('请输入项目名'); return; }
+  const gmode = document.querySelector('input[name="im_gmode"]:checked').value;
+
+  let proj = state.data.projects.find(p=>p.name===projName);
+  let defGrade, type;
+  if (gmode === 'uniform') {
+    defGrade = document.getElementById('im_grade').value;
+    type = document.getElementById('im_type').value;
+  } else {
+    defGrade = document.getElementById('im_defgrade').value;
+    type = document.getElementById('im_ltype').value;
+  }
+  // 自动创建新项目
+  if (!proj) {
+    proj = { name: projName, grade: defGrade, type, mode: '按集', path: '', episodes: {} };
+    state.data.projects.push(proj);
+    toast('已自动创建项目「' + projName + '」');
+  }
+
+  closeModal();
+  toast('正在读取时长...');
+  const thisYear = new Date().getFullYear();
+  let added = 0, skipped = 0, totalSec = 0;
+  for (const epNo of epNos) {
+    const { file, mmdd, rework } = parsed[epNo];
+    try {
+      const sec = await readWavDuration(file);
+      totalSec += sec;
+      let date = new Date().toISOString().slice(0,10);
+      if (mmdd) date = thisYear + '-' + mmdd.slice(0,2) + '-' + mmdd.slice(2,4);
+      const epData = { date, duration: sec2str(sec), rework };
+      // 阶梯模式：写入每集等级（与项目默认不同才写）
+      if (gmode === 'ladder') {
+        const g = gradeForEp(epNo, defGrade);
+        if (g !== defGrade) epData.grade = g;
+      }
+      proj.episodes[epNo] = epData;
+      added++;
+    } catch(err) { console.error('ep'+epNo, err); skipped++; }
+  }
+  saveData(); render();
+  toast('已登记 ' + added + ' 集到「' + projName + '」，共 ' + (totalSec/60).toFixed(1) + ' 分钟' +
+        (skipped ? '，' + skipped + ' 个失败' : ''));
+}
+
+// 拖拽 drop
+dz.addEventListener('drop', async e => {
+  e.preventDefault(); e.stopPropagation();
+  dz.classList.remove('dragover');
+  // 拖拽释放会误触发 click，抑制 300ms
+  suppressClickUntil = Date.now() + 300;
+
+  const files = [];
+  const items = e.dataTransfer.items;
+  if (items && items.length && items[0].webkitGetAsEntry) {
+    async function walk(entry) {
+      if (entry.isFile) {
+        const f = await new Promise(r=>entry.file(r));
+        files.push(f);
+      } else if (entry.isDirectory) {
+        const reader = entry.createReader();
+        let all = [];
+        while (true) {
+          const batch = await new Promise(r=>reader.readEntries(r));
+          if (!batch.length) break;
+          all = all.concat(Array.from(batch));
+        }
+        for (const en of all) await walk(en);
+      }
+    }
+    const ps = [];
+    for (const item of items) {
+      const entry = item.webkitGetAsEntry();
+      if (entry) ps.push(walk(entry));
+    }
+    await Promise.all(ps);
+  } else {
+    for (const f of e.dataTransfer.files) files.push(f);
+  }
+  if (!files.length) { toast('未读取到文件'); return; }
+  const scan = scanFiles(files);
+  if (!scan.wavCount) { toast('没找到 wav 文件'); return; }
+  showImportModal(scan);
+});
+
+// 点击选择文件夹
+document.getElementById('folderInput').addEventListener('change', e => {
+  const scan = scanFiles(e.target.files);
+  e.target.value = '';
+  if (!scan.wavCount) { toast('没找到 wav 文件'); return; }
+  showImportModal(scan);
+});
+
+// ═══════════════════════════════════════════════════════
+// JSON 备份/恢复
+// ═══════════════════════════════════════════════════════
+function exportJSON() {
+  const blob = new Blob([JSON.stringify(state.data,null,2)], {type:'application/json'});
+  downloadBlob(blob, 'settlement-data-' + new Date().toISOString().slice(0,10) + '.json');
+}
+function importJSON(e) {
+  const f = e.target.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    state.data = JSON.parse(r.result);
+    saveData(); render();
+    toast('已恢复数据');
+  };
+  r.readAsText(f);
+}
+
+// ═══════════════════════════════════════════════════════
+// 导出 Excel
+// ═══════════════════════════════════════════════════════
+// SheetJS 社区版不支持写冻结窗格（实测无 <pane>/xSplit/!freeze），
+// 故生成 xlsx 后用 JSZip 解包，往每个 sheetN.xml 注入 <pane> 再打包。
+function freezeTopLeft(cols, rows) {
+  try { return XLSX.utils.encode_cell({c: cols, r: rows}); } catch(e) { return 'A1'; }
+}
+async function freezePanes(wb, rows, cols) {
+  const buf = XLSX.write(wb, {bookType: 'xlsx', type: 'array'});
+  const zip = await JSZip.loadAsync(buf);
+  const active = (cols && rows) ? 'bottomRight' : (cols ? 'topRight' : 'bottomLeft');
+  const pane = `<pane xSplit="${cols}" ySplit="${rows}" topLeftCell="${freezeTopLeft(cols, rows)}" activePane="${active}" state="frozen"/>`;
+  const views = `<sheetViews><sheetView workbookViewId="0">${pane}</sheetView></sheetViews>`;
+  const names = Object.keys(zip.files).filter(n => /^xl\/worksheets\/sheet\d+\.xml$/.test(n) && !zip.files[n].dir);
+  for (const n of names) {
+    let xml = await zip.file(n).async('string');
+    if (/<sheetView\b/.test(xml)) {
+      xml = xml.replace(/<sheetView\b([^>]*?)\s*\/>/, (m, a) => `<sheetView${a}>${pane}</sheetView>`);
+      if (xml.indexOf(pane) < 0) xml = xml.replace(/<sheetView\b([^>]*?)>/, (m, a) => `<sheetView${a}>${pane}`);
+    } else if (/<sheetFormatPr\b/.test(xml)) {
+      xml = xml.replace(/(<sheetFormatPr\b)/, views + '$1');
+    } else if (/<cols\b/.test(xml)) {
+      xml = xml.replace(/(<cols\b)/, views + '$1');
+    } else if (/<sheetData\b/.test(xml)) {
+      xml = xml.replace(/(<sheetData\b)/, views + '$1');
+    } else {
+      xml = xml.replace(/(<worksheet\b[^>]*>)/, `$1${views}`);
+    }
+    zip.file(n, xml);
+  }
+  return await zip.generateAsync({type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+}
+// 桌面版（pywebview）里 Blob 下载不可靠 → 走原生保存对话框；网页版仍走 a[download]
+// 延迟判定：pywebview 在页面加载后才注入 window.pywebview，脚本解析期取不到
+function inApp() { return !!(window.pywebview && window.pywebview.api && window.pywebview.api.save_file); }
+function blobToBase64(blob) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(String(r.result).split(',')[1]);
+    r.onerror = rej;
+    r.readAsDataURL(blob);
+  });
+}
+async function downloadBlob(blob, name) {
+  if (inApp()) {
+    try {
+      const p = await window.pywebview.api.save_file(name, await blobToBase64(blob));
+      if (p) { toast('已保存：' + (p.length > 48 ? '…' + p.slice(-46) : p)); return; }
+      return;                       // 用户取消保存对话框
+    } catch (e) { console.warn('原生保存失败，回退浏览器下载', e); }
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+async function exportXlsx() {
+  if (typeof XLSX === 'undefined') return toast('SheetJS 未加载（需联网加载一次 CDN）');
+  const d = state.data;
+  const wb = XLSX.utils.book_new();
+
+  // Sheet1 单价配置
+  const pData = [
+    ['等级','时长单价(元/分钟)','集单价(元/集)','说明'],
+    ['A', d.prices.A.per_min, d.prices.A.per_ep, 'A 级项目（含 Demo）'],
+    ['B', d.prices.B.per_min, d.prices.B.per_ep, 'B 级项目'],
+    ['C', d.prices.C.per_min, d.prices.C.per_ep, 'C 级项目'],
+    ['D', d.prices.D.per_min, d.prices.D.per_ep, 'D 级项目'],
+  ];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(pData), '单价配置');
+
+  // Sheet2 项目明细（按日期排序，带 period 分组）
+  const list = allEpisodes();
+  const dRows = [['序号','等级','类型','项目','集数','日期','时长','分钟','计价方式','单价','小计','交付路径']];
+  let seq = 0;
+  for (const e of list) {
+    seq++;
+    const price = d.prices[e.proj.grade];
+    const unit = e.proj.mode === '按集' ? price.per_ep : price.per_min;
+    const fee = e.fee;
+    dRows.push([seq, e.proj.grade, e.proj.type, e.proj.name, Number(e.epNo),
+      e.date, e.duration, Math.round(e.sec/60*100)/100, e.proj.mode, unit,
+      Math.round(fee*100)/100, e.proj.path]);
+  }
+  const ws = XLSX.utils.aoa_to_sheet(dRows);
+  ws['!autofilter'] = {ref: XLSX.utils.encode_range({s:{r:1,c:5},e:{r:dRows.length-1,c:5}})};
+  XLSX.utils.book_append_sheet(wb, ws, '项目明细');
+
+  // Sheet3 汇总看板（按当前周期）
+  const groups = {};
+  for (const e of list) {
+    const k = periodKey(e.date);
+    if (!groups[k]) groups[k] = {eps:0, sec:0, fee:0};
+    groups[k].eps++; groups[k].sec+=e.sec; groups[k].fee+=e.fee;
+  }
+  const mRows = [['月份','集数','时长(分)','平均(分/集)','费用(元)','累计(元)']];
+  let cum = 0;
+  for (const k of Object.keys(groups).sort()) {
+    const g = groups[k];
+    cum = Math.round((cum+g.fee)*100)/100;
+    mRows.push([periodLabel(k), g.eps, Math.round(g.sec/60*10)/10,
+      Math.round(g.sec/60/g.eps*100)/100, Math.round(g.fee*100)/100, cum]);
+  }
+  const ws2 = XLSX.utils.aoa_to_sheet(mRows);
+  XLSX.utils.book_append_sheet(wb, ws2, '汇总看板');
+
+  const fr = Math.max(0, settings.freezeRows | 0);
+  const fc = Math.max(0, settings.freezeCols | 0);
+  const fname = '短剧混音结算.xlsx';
+  if (!fr && !fc) { XLSX.writeFile(wb, fname); toast('已导出 xlsx'); return; }
+  if (typeof JSZip === 'undefined') {
+    XLSX.writeFile(wb, fname);
+    toast('已导出 xlsx（JSZip 未加载，未冻结窗格）');
+    return;
+  }
+  try {
+    toast('正在生成…');
+    downloadBlob(await freezePanes(wb, fr, fc), fname);
+    toast(`已导出 xlsx（冻结上 ${fr} 行 / 左 ${fc} 列）`);
+  } catch(e) {
+    console.error(e);
+    XLSX.writeFile(wb, fname);
+    toast('冻结窗格失败，已按普通方式导出');
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// 初始化
+// ═══════════════════════════════════════════════════════
+const THEMES = [
+  {v:'',       n:'晨曦青（浅）'},
+  {v:'paper',  n:'米纸暖（浅）'},
+  {v:'dark',   n:'深夜青（深）'},
+  {v:'warm',   n:'暖夜棕（深）'},
+  {v:'ocean',  n:'深海蓝（深）'},
+  {v:'forest', n:'墨林绿（深）'},
+  {v:'violet', n:'雅紫（深）'},
+];
+function applyTheme(v) {
+  document.documentElement.setAttribute('data-theme', v || '');
+  settings.theme = v || '';
+  saveSettings(settings);
+}
+function toggleTheme() {
+  const i = THEMES.findIndex(t => t.v === (settings.theme || ''));
+  const nx = THEMES[(i + 1) % THEMES.length];
+  applyTheme(nx.v);
+  toast('主题：' + nx.n);
+}
+// 恢复主题
+const savedTheme = localStorage.getItem('settlement-theme');
+if (savedTheme) document.documentElement.setAttribute('data-theme', savedTheme);
+
+document.getElementById('cycleSelect').addEventListener('change', e => {
+  state.cycle = e.target.value;
+  render();
+});
+loadData();
+// 迁移旧主题键 settlement-theme → settings.theme
+try {
+  const old = localStorage.getItem('settlement-theme');
+  if (old !== null && !settings.theme) { settings.theme = old; saveSettings(settings); }
+} catch(e) {}
+document.documentElement.setAttribute('data-theme', settings.theme || '');
+document.getElementById('sortMode').value = settings.defaultSort || 'project';
+render();
+</script>
+</body>
+</html>
