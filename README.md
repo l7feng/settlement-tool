@@ -65,7 +65,7 @@ _shots/                     # 界面截图
 ## 打包
 
 ```
-D:\My-Temporary\pt-build-env\Scripts\python.exe build_exe.py
+D:\Ai-Files\Agent-Preset\build-env\Scripts\python.exe build_exe.py
 ```
 
 输出到 `D:\Ai-Files\Agent-Preset\exe\settlement-tool-v<ver>-<date>\`。

@@ -19,7 +19,7 @@ import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
-PY = r'D:\My-Temporary\pt-build-env\Scripts\python.exe'
+PY = r'D:\Ai-Files\Agent-Preset\build-env\Scripts\python.exe'
 EXE_ROOT = r'D:\Ai-Files\Agent-Preset\exe'
 
 with open(os.path.join(ROOT, 'VERSION'), encoding='utf-8') as f:

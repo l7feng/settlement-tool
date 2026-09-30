@@ -22,21 +22,16 @@
 </script>
 <style>
 :root {
-  --main: #3E5C63;
-  --main-l: #EDF2F2;
-  --band: #F8FAFA;
-  --white: #FFFFFF;
-  --sum-bg: #EFF4F3;
-  --input: #FDFBF3;
-  --line: #DAE2E2;
-  --text: #2B3A3D;
-  --muted: #7A8A8C;
-  --accent: #9C6B4E;
-  --section: #F2F6F5;
-  --danger: #B5544A;
-  --bg: #F8FAFA;
-  --header-bg: #3E5C63;
-  --header-fg: #fff;
+  --main: #8A6A45; --main-l: #F5EFE6; --band: #FAF6F0; --white: #FFFFFF;
+  --sum-bg: #F2EAE0; --input: #FDFBF3; --line: #E2D8CC; --text: #3A322A;
+  --muted: #8A7A68; --accent: #A87C4A; --section: #F2EAE0; --danger: #B5544A;
+  --bg: #FBF8F4; --header-bg: #8A6A45; --header-fg: #fff;
+  --sel: rgba(138,106,69,.08);
+  /* 玻璃参量（2026-09-30 S1 · 对齐 pt H版口径；只有 glass 档消费） */
+  --glass-alpha: 0.55; --glass-edge: 0.9;
+  --glass-shadow: 0 4px 14px rgba(0,0,0,0.12);
+  --backdrop: #EFE6D8;
+  --blob1: rgba(138,106,69,0.25); --blob2: rgba(168,124,74,0.20); --blob3: rgba(200,170,130,0.22);
 }
 [data-theme="dark"] {
   --main: #5B8A92;
@@ -54,36 +49,86 @@
   --bg: #1A2427;
   --header-bg: #2A3A3E;
   --header-fg: #D8E2E4;
+  --sel: rgba(255,255,255,.05);
+  --glass-alpha: 0.08; --glass-edge: 0.16;
+  --glass-shadow: 0 6px 18px rgba(0,0,0,0.40);
+  --backdrop: #162023;
+  --blob1: rgba(91,138,146,0.20); --blob2: rgba(200,149,108,0.14); --blob3: rgba(80,120,130,0.16);
 }
+/* 米纸暖（浅）· 2026-09-30 S1 对齐 7F 色彩真源：
+   --main = 焙茶橘 #9C4A2E（7F 记忆色深版，白字 ≈5:1）；--accent = 陶土中间调
+   （记忆色 #E07A52 与深版之间，大数字可读）；淡染底 = 杏白 #FBEFE9（7F 真源）。 */
 [data-theme="paper"] {
-  --main: #8A6A45; --main-l: #F5EFE6; --band: #FAF6F0; --white: #FFFFFF;
-  --sum-bg: #F2EAE0; --input: #FDFBF3; --line: #E2D8CC; --text: #3A322A;
-  --muted: #8A7A68; --accent: #A87C4A; --section: #F2EAE0; --danger: #B5544A;
-  --bg: #FBF8F4; --header-bg: #8A6A45; --header-fg: #fff;
+  --main: #9C4A2E; --main-l: #FBEFE9; --band: #FAF3EC; --white: #FFFFFF;
+  --sum-bg: #F5E3D8; --input: #FDF9F4; --line: #E6D5C8; --text: #3A322A;
+  --muted: #8A7264; --accent: #C0623C; --section: #F5E9DE; --danger: #B5544A;
+  --bg: #FBF6F1; --header-bg: #9C4A2E; --header-fg: #FFFDFB;
+  --sel: rgba(156,74,46,.08);
+  --glass-alpha: 0.55; --glass-edge: 0.9;
+  --glass-shadow: 0 4px 14px rgba(0,0,0,0.12);
+  --backdrop: #F3E7DC;
+  --blob1: rgba(224,122,82,0.28); --blob2: rgba(196,120,74,0.22); --blob3: rgba(240,180,120,0.20);
 }
 [data-theme="warm"] {
   --main: #B08050; --main-l: #3A2E24; --band: #2E251E; --white: #33291F;
   --sum-bg: #4A3A2C; --input: #3A2F24; --line: #4A3C2E; --text: #EBDCC8;
   --muted: #B39C82; --accent: #D9A441; --section: #3A2E24; --danger: #D4706A;
   --bg: #241D16; --header-bg: #3A2E24; --header-fg: #EBDCC8;
+  --sel: rgba(255,255,255,.05);
+  --glass-alpha: 0.08; --glass-edge: 0.16;
+  --glass-shadow: 0 6px 18px rgba(0,0,0,0.40);
+  --backdrop: #1E1812;
+  --blob1: rgba(217,164,65,0.16); --blob2: rgba(176,128,80,0.14); --blob3: rgba(120,90,60,0.12);
 }
 [data-theme="ocean"] {
   --main: #4F7EA8; --main-l: #26333F; --band: #1E2833; --white: #263242;
   --sum-bg: #2E4256; --input: #243244; --line: #35485C; --text: #D6E2EE;
   --muted: #8FA6BC; --accent: #E0A458; --section: #26333F; --danger: #D4706A;
   --bg: #172029; --header-bg: #26333F; --header-fg: #D6E2EE;
+  --sel: rgba(255,255,255,.05);
+  --glass-alpha: 0.08; --glass-edge: 0.16;
+  --glass-shadow: 0 6px 18px rgba(0,0,0,0.40);
+  --backdrop: #131B23;
+  --blob1: rgba(79,126,168,0.20); --blob2: rgba(224,164,88,0.14); --blob3: rgba(70,110,150,0.16);
 }
 [data-theme="forest"] {
   --main: #5F9470; --main-l: #263A2C; --band: #1E2A22; --white: #26332A;
   --sum-bg: #2F4A38; --input: #2E3A2E; --line: #3A4A3E; --text: #D8E4D8;
   --muted: #8AA48E; --accent: #C8956C; --section: #263A2C; --danger: #D4706A;
   --bg: #1A241D; --header-bg: #263A2C; --header-fg: #D8E4D8;
+  --sel: rgba(255,255,255,.05);
+  --glass-alpha: 0.08; --glass-edge: 0.16;
+  --glass-shadow: 0 6px 18px rgba(0,0,0,0.40);
+  --backdrop: #161F19;
+  --blob1: rgba(95,148,112,0.18); --blob2: rgba(200,149,108,0.12); --blob3: rgba(70,120,90,0.14);
 }
 [data-theme="violet"] {
   --main: #7E6BA8; --main-l: #2E2A3E; --band: #241F33; --white: #2C2740;
   --sum-bg: #3D3455; --input: #322C46; --line: #423A58; --text: #E0DCEE;
   --muted: #A094C0; --accent: #D9A0C0; --section: #2E2A3E; --danger: #D4706A;
   --bg: #1C1826; --header-bg: #2E2A3E; --header-fg: #E0DCEE;
+  --sel: rgba(255,255,255,.05);
+  --glass-alpha: 0.08; --glass-edge: 0.16;
+  --glass-shadow: 0 6px 18px rgba(0,0,0,0.40);
+  --backdrop: #171420;
+  --blob1: rgba(126,107,168,0.20); --blob2: rgba(217,160,192,0.14); --blob3: rgba(100,80,140,0.16);
+}
+/* ── 风格轴 data-style（2026-09-30 S1 · 对齐 pt H版）──
+   pixel = 直角硬边（原生，观感贴近旧版）；glass = 真玻璃（半透明 + 背景模糊 + 光斑）。
+   ⚠ 踩坑（pt 76 号实锤）：background 简写一行只准一个颜色值，必须拆行写。 */
+:root[data-style="pixel"] {
+  --radius: 0px; --radius-sm: 0px; --btn-radius: 0px;
+  --card-bg: var(--main-l); --card-border: 1px solid var(--line);
+  --card-shadow: none; --glass-blob-display: none;
+  --glass-blur: 0px;
+}
+:root[data-style="glass"] {
+  --radius: 14px; --radius-sm: 8px; --btn-radius: 14px;
+  --card-bg: rgba(255,255,255,var(--glass-alpha, 0.55));
+  --card-border: 1px solid rgba(255,255,255,var(--glass-edge, 0.9));
+  --card-shadow: var(--glass-shadow, 0 4px 14px rgba(0,0,0,0.12));
+  --glass-blob-display: block;
+  --glass-blur: 10px;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
@@ -94,6 +139,14 @@ body {
   line-height: 1.5;
   transition: background .2s, color .2s;
 }
+:root[data-style="glass"] body { background: var(--backdrop); }
+/* ── 背景光斑（玻璃档的主要氛围来源；pixel 档隐藏）── */
+.blob { display: var(--glass-blob-display, none); opacity: var(--blob-opacity, 1);
+  position: fixed; border-radius: 50%;
+  filter: blur(42px); pointer-events: none; z-index: 0; }
+.blob.b1 { width: 240px; height: 240px; top: 6%; left: 4%; background: var(--blob1); }
+.blob.b2 { width: 200px; height: 200px; top: 40%; right: 2%; background: var(--blob2); }
+.blob.b3 { width: 220px; height: 220px; bottom: -6%; left: 30%; background: var(--blob3); }
 /* ── 顶栏 ── */
 .topbar {
   background: var(--main);
@@ -110,7 +163,7 @@ body {
 .topbar select {
   background: rgba(255,255,255,.15);
   color: #fff; border: 1px solid rgba(255,255,255,.3);
-  padding: 4px 8px; border-radius: 4px; font-size: 13px;
+  padding: 4px 8px; border-radius: var(--radius-sm); font-size: 13px;
 }
 .topbar select option { color: var(--text); }
 /* ── 卡片 ── */
@@ -119,14 +172,23 @@ body {
   grid-template-columns: repeat(3, 1fr);
   gap: 14px;
   padding: 16px 20px 8px;
+  position: relative; z-index: 1;
 }
 .card {
-  background: var(--main-l);
-  border-radius: 8px;
+  background: var(--card-bg);
+  border: var(--card-border);
+  border-radius: var(--radius);
+  box-shadow: var(--card-shadow);
   padding: 14px 18px;
+  position: relative;
+}
+:root[data-style="glass"] .card,
+:root[data-style="glass"] .modal {
+  backdrop-filter: blur(var(--glass-blur, 10px));
+  -webkit-backdrop-filter: blur(var(--glass-blur, 10px));
 }
 .card .label { font-size: 12px; color: var(--muted); }
-.card .value { font-size: 26px; font-weight: 700; color: var(--accent); margin-top: 2px; }
+.card .value { font-size: 26px; font-weight: 700; color: var(--accent); margin-top: 2px; font-variant-numeric: tabular-nums; }
 /* ── 工具栏 ── */
 .toolbar {
   padding: 10px 20px;
@@ -134,18 +196,21 @@ body {
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
+  position: relative; z-index: 1;
 }
 .btn {
   background: var(--main);
   color: #fff;
-  border: none;
+  border: 1px solid rgba(0,0,0,.22);
   padding: 7px 14px;
-  border-radius: 5px;
+  border-radius: var(--btn-radius);
   cursor: pointer;
   font-size: 13px;
   font-family: inherit;
+  transition: filter .15s, transform .05s, background .15s;
 }
-.btn:hover { opacity: .9; }
+.btn:hover { filter: brightness(1.08); }
+.btn:active { transform: translateY(1px); }
 .btn.secondary { background: var(--white); color: var(--main); border: 1px solid var(--line); }
 .btn.accent { background: var(--accent); }
 .btn.danger { background: var(--danger); }
@@ -155,6 +220,7 @@ body {
   display: flex;
   gap: 4px;
   border-bottom: 2px solid var(--line);
+  position: relative; z-index: 1;
 }
 .tab {
   padding: 8px 16px;
@@ -166,7 +232,7 @@ body {
 }
 .tab.active { color: var(--main); border-bottom-color: var(--main); font-weight: 600; }
 /* ── 主内容 ── */
-.content { padding: 14px 20px 40px; }
+.content { padding: 14px 20px 40px; position: relative; z-index: 1; }
 .view { display: none; }
 .view.active { display: block; }
 /* ── 表格 ── */
@@ -175,9 +241,10 @@ table {
   border-collapse: collapse;
   background: var(--white);
   font-size: 13px;
+  font-variant-numeric: tabular-nums;   /* 金额/时长列上下对齐 */
 }
 th, td {
-  padding: 7px 10px;
+  padding: 8px 10px;
   text-align: center;
   border-bottom: 1px solid var(--line);
 }
@@ -190,6 +257,7 @@ th {
 td.l, th.l { text-align: left; }
 td.r, th.r { text-align: right; }
 tr:nth-child(even) td { background: var(--band); }
+tr:hover td { background: var(--sel); }
 tr.subtotal td { background: var(--sum-bg); font-weight: 600; color: var(--main); }
 tr.grand td { background: var(--main); color: #fff; font-weight: 700; font-size: 14px; }
 /* ── 行内删除：默认很淡，悬停才清晰（设置里可开关） ── */
@@ -205,7 +273,7 @@ body.del-hover tr:hover .btn-del-x { visibility: visible; }
 /* ── 删除模式下的醒目红色删除符 ── */
 .btn-del-red {
   background: var(--danger); color: #fff; border: none;
-  border-radius: 4px; padding: 2px 8px; font-size: 12px;
+  border-radius: var(--radius-sm); padding: 2px 8px; font-size: 12px;
   cursor: pointer; font-family: inherit; line-height: 1.4;
 }
 .btn-del-red:hover { opacity: .85; }
@@ -218,10 +286,10 @@ body.del-hover tr:hover .btn-del-x { visibility: visible; }
 tr:hover .btn-edit { opacity: .8; }
 .btn-edit:hover { opacity: 1; color: var(--main); }
 /* ── 月度折叠 ── */
-.month-group { margin-bottom: 6px; }
+.month-group { margin-bottom: 6px; position: relative; z-index: 1; }
 .month-header {
   background: var(--section);
-  padding: 9px 14px;
+  padding: 10px 14px;
   cursor: pointer;
   font-weight: 600;
   color: var(--main);
@@ -240,10 +308,10 @@ tr:hover .btn-edit { opacity: .8; }
 .grand-total {
   display: flex; gap: 20px; flex-wrap: wrap; align-items: baseline;
   background: var(--main); color: #fff;
-  padding: 10px 16px; border-radius: 6px; margin-bottom: 10px;
+  padding: 10px 16px; border-radius: var(--radius-sm); margin-bottom: 10px;
   font-size: 13px;
 }
-.grand-total .gt-item b { font-size: 16px; margin: 0 2px; }
+.grand-total .gt-item b { font-size: 16px; margin: 0 2px; font-variant-numeric: tabular-nums; }
 /* ── 筛选栏 ── */
 .filter-bar {
   padding: 8px 20px;
@@ -256,19 +324,20 @@ tr:hover .btn-edit { opacity: .8; }
 .filter-bar select {
   padding: 4px 8px;
   border: 1px solid var(--line);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   font-family: inherit;
 }
 /* ── 拖拽区 ── */
 .drop-zone {
   margin: 10px 20px;
   border: 2px dashed var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   padding: 20px;
   text-align: center;
   color: var(--muted);
   font-size: 13px;
   transition: all .2s;
+  position: relative; z-index: 1;
 }
 .drop-zone.dragover {
   border-color: var(--main);
@@ -287,13 +356,14 @@ tr:hover .btn-edit { opacity: .8; }
 }
 .modal-mask.show { display: flex; }
 .modal {
-  background: var(--white);
-  border-radius: 10px;
+  background: var(--card-bg);
+  border: var(--card-border);
+  border-radius: var(--radius);
   padding: 22px;
   width: 460px;
   max-height: 80vh;
   overflow-y: auto;
-  box-shadow: 0 8px 30px rgba(0,0,0,.15);
+  box-shadow: 0 16px 44px rgba(0,0,0,.30);
 }
 .modal h2 { font-size: 16px; color: var(--main); margin-bottom: 16px; }
 .form-row {
@@ -307,7 +377,7 @@ tr:hover .btn-edit { opacity: .8; }
   flex: 1;
   padding: 6px 8px;
   border: 1px solid var(--line);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   font-family: inherit;
   font-size: 13px;
 }
@@ -325,7 +395,7 @@ tr:hover .btn-edit { opacity: .8; }
 }
 .cal-nav button {
   background: var(--white); border: 1px solid var(--line);
-  padding: 4px 12px; border-radius: 4px; cursor: pointer;
+  padding: 4px 12px; border-radius: var(--radius-sm); cursor: pointer;
   font-family: inherit;
 }
 .cal-nav .cal-title { font-size: 15px; font-weight: 600; color: var(--main); }
@@ -338,7 +408,7 @@ tr:hover .btn-edit { opacity: .8; }
 .cal-cell {
   background: var(--white);
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   min-height: 92px;
   padding: 6px;
   font-size: 12px;
@@ -362,6 +432,18 @@ tr:hover .btn-edit { opacity: .8; }
   padding-bottom: 4px;
 }
 
+/* ── 空态（S2）── */
+.empty-state {
+  padding: 48px 20px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 2;
+  background: var(--card-bg);
+  border: 2px dashed var(--line);
+  border-radius: var(--radius);
+}
+.empty-state b { color: var(--main); }
 /* ── toast ── */
 .toast {
   position: fixed;
@@ -370,7 +452,7 @@ tr:hover .btn-edit { opacity: .8; }
   background: var(--main);
   color: #fff;
   padding: 10px 22px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   font-size: 13px;
   z-index: 300;
   opacity: 0;
@@ -385,6 +467,36 @@ tr:hover .btn-edit { opacity: .8; }
   table { font-size: 12px; }
   th, td { padding: 5px 6px; }
 }
+
+/* ═══ 玻璃微调面板（2026-09-30 S3 · 自 pt glass-tuner.js 去桥移植）═══ */
+.gt-btn { display:none; align-items:center; gap:6px; font-size:12px; color:#fff; cursor:pointer;
+  border:1px solid rgba(255,255,255,.3); border-radius:var(--btn-radius); padding:5px 10px;
+  background:rgba(255,255,255,.15); user-select:none; }
+.gt-btn:hover { background:rgba(255,255,255,.25); }
+body.gt-on .gt-btn { display:inline-flex; }
+.gt-panel { display:none; position:fixed; top:64px; right:14px; z-index:250; width:280px;
+  background:var(--white); border:1px solid var(--line); border-radius:var(--radius-sm);
+  box-shadow:0 10px 34px rgba(0,0,0,0.22); overflow:hidden; }
+body.gt-on .gt-panel.open { display:block; }
+.gt-head { display:flex; align-items:center; justify-content:space-between; padding:9px 12px;
+  background:var(--section); cursor:move; user-select:none; }
+.gt-head b { font-size:12.5px; color:var(--main); }
+.gt-close { cursor:pointer; color:var(--muted); padding:0 4px; }
+.gt-close:hover { color:var(--text); }
+.gt-body { padding:6px 12px 12px; }
+.gt-row { display:block; font-size:11.5px; color:var(--muted); margin:9px 0 2px; }
+.gt-row .gt-val { float:right; color:var(--text); font-weight:600; }
+.gt-row input[type=range] { width:100%; accent-color:var(--main); margin-top:3px; }
+.gt-switches { display:flex; gap:12px; margin:10px 0 2px; font-size:11.5px; color:var(--muted); flex-wrap:wrap; }
+.gt-switches label { display:flex; align-items:center; gap:4px; cursor:pointer; }
+.gt-switches input { accent-color:var(--main); }
+.gt-actions { display:flex; gap:8px; margin-top:10px; }
+.gt-actions button { flex:1; border:1px solid var(--line); background:var(--input); color:var(--text);
+  border-radius:var(--radius-sm); padding:6px 0; font:11.5px/1.3 inherit; cursor:pointer; }
+.gt-actions button:hover { background:var(--sel); }
+.gt-actions .gt-pri { background:var(--main); border-color:var(--main); color:#fff; font-weight:600; }
+.gt-note { font-size:10.5px; color:var(--muted); margin-top:8px; }
+.gt-note b { color:var(--text); }
 </style>
 </head>
 <body>
@@ -398,6 +510,7 @@ tr:hover .btn-edit { opacity: .8; }
       <option value="natural">自然月（1号~月底）</option>
       <option value="half">半月结（16号~次月15号）</option>
     </select>
+    <div class="gt-btn" id="gtBtn" title="玻璃微调（拖旋钮看效果）">🎛 玻璃</div>
     <button class="btn" style="background:transparent;border:1px solid var(--line)" onclick="toggleTheme()">🌓 主题</button>
     <button class="btn" style="background:var(--white);color:var(--main)" onclick="exportXlsx()">导出 Excel</button>
   </div>
@@ -431,6 +544,8 @@ tr:hover .btn-edit { opacity: .8; }
   拖拽交付文件夹到这里，或点击选择文件夹 —— 自动扫描 wav、读取时长、按文件名识别集号
   <input type="file" id="folderInput" webkitdirectory directory multiple style="display:none">
 </div>
+<!-- 背景光斑（玻璃档显示；pixel 档 display:none） -->
+<div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div>
 
 <!-- tab 切换 -->
 <div class="tabs">
@@ -677,6 +792,20 @@ function renderDetail() {
   const sortMode = document.getElementById('sortMode').value;
   const box = document.getElementById('view-detail');
 
+  // S2 空态：无任何数据 → 引导登记；有筛选无结果 → 提示放宽
+  if (!list.length) {
+    const hasFilter = !!(document.getElementById('monthFilter').value
+      || document.getElementById('gradeFilter').value
+      || document.getElementById('projFilter').value
+      || document.getElementById('modeFilter').value);
+    box.innerHTML = '<div class="empty-state">'
+      + (hasFilter
+        ? '当前筛选下没有记录，试试<b>放宽筛选条件</b>'
+        : '还没有登记任何集<br>拖入交付文件夹，或点工具栏 <b>+ 登记集</b> 开始')
+      + '</div>';
+    return;
+  }
+
   if (sortMode === 'time') {
     renderCalendar(list, box);
     return;
@@ -815,7 +944,7 @@ function epColgroup(cols) {
     + '<col style="width:9%"></colgroup>';
 }
 function epCellHtml(e, key) {
-  const rw = e.rework ? ' <span style="background:var(--accent);color:#fff;padding:1px 5px;border-radius:3px;font-size:10px">重混</span>' : '';
+  const rw = e.rework ? ' <span style="background:var(--accent);color:#fff;padding:1px 5px;border-radius:2px;font-size:10px">重混</span>' : '';
   switch(key) {
     case 'epNo':     return `<td>EP${e.epNo}</td>`;
     case 'proj':     return `<td class="l">${e.proj.name}${rw}</td>`;
@@ -830,7 +959,8 @@ function epCellHtml(e, key) {
   return '<td></td>';
 }
 function loadSettings() {
-  const d = {confirmDel:true, hoverDel:false, defaultSort:'project', weekStart:'mon', delMode:false, hideEmpty:false, freezeRows:1, freezeCols:0, theme:''};
+  // style 默认 glass（2026-09-30 S2 人类裁决：打开即玻璃·保守参数；pixel 作回退档）
+  const d = {confirmDel:true, hoverDel:false, defaultSort:'project', weekStart:'mon', delMode:false, hideEmpty:false, freezeRows:1, freezeCols:0, theme:'', style:'glass'};
   try { return Object.assign(d, JSON.parse(localStorage.getItem(SET_KEY) || '{}')); } catch(e) { return d; }
 }
 function saveSettings(s) { localStorage.setItem(SET_KEY, JSON.stringify(s)); }
@@ -903,7 +1033,7 @@ function openEditEp(projName, epNo) {
   openModal(`<h2>编辑 ${projName} · EP${epNo}</h2>
     <div class="form-row"><label>日期</label><input id="e_date" type="date" value="${ep.date}"></div>
     <div class="form-row"><label>时长</label><input id="e_dur" value="${ep.duration}"></div>
-    <div class="form-row"><label>等级</label><select id="e_grade" style="flex:1;padding:6px 8px;border:1px solid var(--line);border-radius:4px">${grades}</select></div>
+    <div class="form-row"><label>等级</label><select id="e_grade" style="flex:1;padding:6px 8px;border:1px solid var(--line);border-radius:var(--radius-sm)">${grades}</select></div>
     <div class="form-row"><label>重混</label><input type="checkbox" id="e_rework" ${ep.rework?'checked':''}></div>
     <div class="modal-actions">
       <button class="btn secondary" onclick="closeModal()">取消</button>
@@ -941,20 +1071,23 @@ function openSettings() {
   h += '<h3 style="font-size:13px;color:var(--main);margin:14px 0 6px">删除安全</h3>';
   h += `<div class="form-row"><label style="width:auto;text-align:left"><input type="checkbox" id="setConfirm" ${settings.confirmDel?'checked':''}> 删除时弹确认框</label></div>`;
   h += '<h3 style="font-size:13px;color:var(--main);margin:14px 0 6px">默认视图</h3>';
-  h += `<div class="form-row"><label style="width:70px">默认排序</label><select id="setSort" style="flex:1;padding:5px;border:1px solid var(--line);border-radius:4px">
+  h += `<div class="form-row"><label style="width:70px">默认排序</label><select id="setSort" style="flex:1;padding:5px;border:1px solid var(--line);border-radius:var(--radius-sm)">
     <option value="project" ${settings.defaultSort==='project'?'selected':''}>按项目</option>
     <option value="time" ${settings.defaultSort==='time'?'selected':''}>按时间（日历）</option></select></div>`;
-  h += `<div class="form-row"><label style="width:70px">每周起始</label><select id="setWeek" style="flex:1;padding:5px;border:1px solid var(--line);border-radius:4px">
+  h += `<div class="form-row"><label style="width:70px">每周起始</label><select id="setWeek" style="flex:1;padding:5px;border:1px solid var(--line);border-radius:var(--radius-sm)">
     <option value="mon" ${settings.weekStart==='mon'?'selected':''}>周一</option>
     <option value="sun" ${settings.weekStart==='sun'?'selected':''}>周日</option></select></div>`;
   h += `<div class="form-row"><label style="width:auto;text-align:left"><input type="checkbox" id="setHideEmpty" ${settings.hideEmpty?'checked':''}> 「按项目」页隐藏 0 集项目（无筛选时）</label></div>`;
   h += '<h3 style="font-size:13px;color:var(--main);margin:14px 0 6px">外观</h3>';
-  h += `<div class="form-row"><label style="width:70px">主题</label><select id="setTheme" style="flex:1;padding:5px;border:1px solid var(--line);border-radius:4px">`
+  h += `<div class="form-row"><label style="width:70px">主题</label><select id="setTheme" style="flex:1;padding:5px;border:1px solid var(--line);border-radius:var(--radius-sm)">`
     + THEMES.map(t => `<option value="${t.v}" ${(settings.theme||'')===t.v?'selected':''}>${t.n}</option>`).join('')
     + `</select></div>`;
+  h += `<div class="form-row"><label style="width:70px">风格</label><select id="setStyle" style="flex:1;padding:5px;border:1px solid var(--line);border-radius:var(--radius-sm)">
+    <option value="glass" ${settings.style!=='pixel'?'selected':''}>玻璃（顶栏 🎛 可微调）</option>
+    <option value="pixel" ${settings.style==='pixel'?'selected':''}>像素直角（回退档）</option></select></div>`;
   h += '<h3 style="font-size:13px;color:var(--main);margin:14px 0 6px">导出 Excel · 冻结窗格范围</h3>';
-  h += `<div class="form-row"><label style="width:80px">冻结上方</label><input id="setFRows" type="number" min="0" max="20" value="${settings.freezeRows}" style="width:70px;padding:5px;border:1px solid var(--line);border-radius:4px"> 行</div>`;
-  h += `<div class="form-row"><label style="width:80px">冻结左侧</label><input id="setFCols" type="number" min="0" max="20" value="${settings.freezeCols}" style="width:70px;padding:5px;border:1px solid var(--line);border-radius:4px"> 列</div>`;
+  h += `<div class="form-row"><label style="width:80px">冻结上方</label><input id="setFRows" type="number" min="0" max="20" value="${settings.freezeRows}" style="width:70px;padding:5px;border:1px solid var(--line);border-radius:var(--radius-sm)"> 行</div>`;
+  h += `<div class="form-row"><label style="width:80px">冻结左侧</label><input id="setFCols" type="number" min="0" max="20" value="${settings.freezeCols}" style="width:70px;padding:5px;border:1px solid var(--line);border-radius:var(--radius-sm)"> 列</div>`;
   h += '<p style="font-size:11px;color:var(--muted);padding:0 2px">作用于导出的全部工作表。填 1 行＝冻结表头；同时填列＝连左侧列一起冻结。</p>';
   h += '<div class="modal-actions">';
   h += '<button class="btn secondary" onclick="exportJSON()">备份 JSON</button>';
@@ -983,8 +1116,10 @@ function saveSettingsFromModal() {
   settings.freezeRows = Math.max(0, parseInt(document.getElementById('setFRows').value) || 0);
   settings.freezeCols = Math.max(0, parseInt(document.getElementById('setFCols').value) || 0);
   settings.theme = document.getElementById('setTheme').value || '';
+  settings.style = document.getElementById('setStyle').value || 'glass';
   saveSettings(settings);
   document.documentElement.setAttribute('data-theme', settings.theme);
+  document.documentElement.setAttribute('data-style', settings.style);
   closeModal(); render(); toast('设置已保存');
 }
 function updateSelUI() {
@@ -1768,7 +1903,8 @@ function toggleTheme() {
   applyTheme(nx.v);
   toast('主题：' + nx.n);
 }
-// 恢复主题
+// 恢复主题 + 风格档（2026-09-30 S2：默认主题=米纸暖·陶土橘（7F 对齐，人类裁决）；
+// 默认风格档=glass 保守参数（浅 0.55 / 深 0.08），表头/表格实色不透）
 const savedTheme = localStorage.getItem('settlement-theme');
 if (savedTheme) document.documentElement.setAttribute('data-theme', savedTheme);
 
@@ -1777,12 +1913,258 @@ document.getElementById('cycleSelect').addEventListener('change', e => {
   render();
 });
 loadData();
+
+// ═══════════════════════════════════════════════════════
+// 玻璃微调面板（2026-09-30 S3 · 自 pt-audio-toolkit glass-tuner.js 去桥移植）
+// 四旋钮三开关全走 <html> inline 变量实时生效；localStorage 即时存（300ms 防抖），
+// 「记住」立即落盘。无桥（本工具壳不接 pywebview api），纯 localStorage。
+// 切到 pixel 档自动摘除全部 inline 变量（inline 会压过样式表，必须手动清）。
+// ═══════════════════════════════════════════════════════
+(function () {
+  "use strict";
+  var LS_KEY = "settlement-glass-tuner";
+  var DOC = document.documentElement;
+
+  // 默认值 = style.css 玻璃档现值（浅 0.55 / 深 0.08，人类裁决的保守起步）
+  var DEF = {
+    blur: 10,           // px
+    radius: 14,         // px
+    blob: 1.0,          // 光斑浓度倍率
+    hl: 1,              // 高光边
+    shadow: 1,          // 投影
+    bars: 0,            // 顶栏也透
+    alphaLight: 0.55,   // 浅色主题卡片 alpha
+    alphaDark: 0.08     // 深色主题卡片 alpha
+  };
+  var DARK_THEMES = { dark: 1, warm: 1, ocean: 1, forest: 1, violet: 1 };
+  function isDark() { return !!DARK_THEMES[DOC.dataset.theme || ""]; }
+
+  var st = loadLocal();
+  var ui = null;
+  var saveTimer = null;
+
+  function loadLocal() {
+    var d = JSON.parse(JSON.stringify(DEF));
+    try {
+      var raw = localStorage.getItem(LS_KEY);
+      if (raw) {
+        var o = JSON.parse(raw);
+        for (var k in d) { if (o[k] !== undefined) { d[k] = o[k]; } }
+      }
+    } catch (e) { /* 损坏就当没有 */ }
+    return d;
+  }
+  function saveLocal() {
+    try { localStorage.setItem(LS_KEY, JSON.stringify(st)); } catch (e) {}
+  }
+  function set(k, v) { DOC.style.setProperty(k, v); }
+  function rm(k) { DOC.style.removeProperty(k); }
+
+  // 顶栏也透：把当前主题 --main 真值转 rgba（按主题缓存，防读到上一轮覆盖值）
+  var mainBase = {};
+  function baseMain() {
+    var m = DOC.dataset.theme || "";
+    if (!mainBase[m]) {
+      mainBase[m] = (getComputedStyle(DOC).getPropertyValue("--main") || "").trim() || "#888888";
+    }
+    return mainBase[m];
+  }
+  function hexToRgba(hex, a) {
+    var h = String(hex).trim().replace("#", "");
+    if (h.length === 3) { h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2]; }
+    if (h.length !== 6 || /[^0-9a-fA-F]/.test(h)) { return "rgba(136,136,136," + a + ")"; }
+    return "rgba(" + parseInt(h.substr(0, 2), 16) + "," + parseInt(h.substr(2, 2), 16) + ","
+      + parseInt(h.substr(4, 2), 16) + "," + a + ")";
+  }
+
+  function apply() {
+    var dark = isDark();
+    set("--glass-alpha", dark ? st.alphaDark : st.alphaLight);
+    set("--glass-blur", st.blur + "px");
+    set("--radius", st.radius + "px");
+    set("--btn-radius", st.radius + "px");
+    set("--radius-sm", st.radius === 0 ? "0px" : Math.min(8, Math.round(st.radius / 2)) + "px");
+    set("--blob-opacity", st.blob);
+    set("--card-border", st.hl
+      ? "1px solid rgba(255,255,255," + (dark ? "0.16" : "0.9") + ")"
+      : "1px solid rgba(255,255,255,0)");
+    set("--card-shadow", st.shadow
+      ? (dark ? "0 6px 18px rgba(0,0,0,0.40)" : "0 4px 14px rgba(0,0,0,0.12)")
+      : "none");
+    var topbar = document.querySelector(".topbar");
+    if (topbar) {
+      topbar.style.background = st.bars ? hexToRgba(baseMain(), 0.85) : "";
+    }
+  }
+  function clearAll() {
+    ["--glass-alpha", "--glass-blur", "--radius", "--btn-radius", "--radius-sm",
+     "--blob-opacity", "--card-border", "--card-shadow"].forEach(rm);
+    var topbar = document.querySelector(".topbar");
+    if (topbar) { topbar.style.background = ""; }
+  }
+
+  var HTML = ""
+    + "<div class='gt-head' id='gtDrag'><b>🎛 玻璃微调</b><span class='gt-close' id='gtClose' title='收起'>✕</span></div>"
+    + "<div class='gt-body'>"
+    + "<label class='gt-row'>卡片透明度（能看穿多少）<span class='gt-val' id='vAlpha'></span>"
+    + "<input type='range' id='rAlpha' min='0.02' max='0.85' step='0.01'></label>"
+    + "<label class='gt-row'>模糊强度（背后糊多少）<span class='gt-val' id='vBlur'></span>"
+    + "<input type='range' id='rBlur' min='0' max='30' step='1'></label>"
+    + "<label class='gt-row'>圆角大小（角圆多少）<span class='gt-val' id='vRadius'></span>"
+    + "<input type='range' id='rRadius' min='0' max='24' step='1'></label>"
+    + "<label class='gt-row'>光斑浓度（背景彩光多明显）<span class='gt-val' id='vBlob'></span>"
+    + "<input type='range' id='rBlob' min='0' max='2' step='0.05'></label>"
+    + "<div class='gt-switches'>"
+    + "<label><input type='checkbox' id='cHl'> 高光边</label>"
+    + "<label><input type='checkbox' id='cShadow'> 投影</label>"
+    + "<label><input type='checkbox' id='cBars'> 顶栏也透</label>"
+    + "</div>"
+    + "<div class='gt-actions'>"
+    + "<button id='gtRemember' class='gt-pri'>记住</button>"
+    + "<button id='gtCopy'>复制参数</button>"
+    + "<button id='gtReset'>恢复默认</button>"
+    + "</div>"
+    + "<div class='gt-note'>浅色/深色的卡片透明度各存一份，当前调的是<b id='gtMode'>浅色</b>；「记住」存到本机浏览器（localStorage）。</div>"
+    + "</div>";
+
+  function build() {
+    var panel = document.createElement("div");
+    panel.className = "gt-panel";
+    panel.id = "gtPanel";
+    panel.innerHTML = HTML;
+    document.body.appendChild(panel);
+
+    document.getElementById("gtBtn").onclick = function () { panel.classList.toggle("open"); };
+    panel.querySelector("#gtClose").onclick = function () { panel.classList.remove("open"); };
+
+    panel.querySelector("#rAlpha").oninput = function (e) {
+      st[isDark() ? "alphaDark" : "alphaLight"] = parseFloat(e.target.value);
+      onTick();
+    };
+    panel.querySelector("#rBlur").oninput = function (e) { st.blur = parseFloat(e.target.value); onTick(); };
+    panel.querySelector("#rRadius").oninput = function (e) { st.radius = parseFloat(e.target.value); onTick(); };
+    panel.querySelector("#rBlob").oninput = function (e) { st.blob = parseFloat(e.target.value); onTick(); };
+    panel.querySelector("#cHl").onchange = function (e) { st.hl = e.target.checked ? 1 : 0; onTick(); };
+    panel.querySelector("#cShadow").onchange = function (e) { st.shadow = e.target.checked ? 1 : 0; onTick(); };
+    panel.querySelector("#cBars").onchange = function (e) { st.bars = e.target.checked ? 1 : 0; onTick(); };
+
+    panel.querySelector("#gtRemember").onclick = function () {
+      saveLocal(); flash(this, "已记住 ✓");
+    };
+    panel.querySelector("#gtCopy").onclick = function () { copyParams(this); };
+    panel.querySelector("#gtReset").onclick = function () {
+      st = JSON.parse(JSON.stringify(DEF));
+      saveLocal(); apply(); syncUI(); flash(this, "已还原");
+    };
+
+    drag(panel, panel.querySelector("#gtDrag"));
+    ui = panel;
+    syncUI();
+  }
+
+  function onTick() { apply(); saveLocalDebounced(); syncVals(); }
+  function saveLocalDebounced() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveLocal, 300);
+  }
+  function flash(el, txt) {
+    var old = el.textContent;
+    el.textContent = txt;
+    setTimeout(function () { el.textContent = old; }, 1200);
+  }
+  function copyParams(el) {
+    var txt = JSON.stringify(st, null, 2);
+    function fb() {
+      try {
+        var ta = document.createElement("textarea");
+        ta.value = txt; document.body.appendChild(ta); ta.select();
+        document.execCommand("copy"); document.body.removeChild(ta);
+        flash(el, "已复制 ✓");
+      } catch (e) { flash(el, "复制失败"); }
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(txt).then(function () { flash(el, "已复制 ✓"); }, fb);
+    } else { fb(); }
+  }
+  function drag(box, handle) {
+    var sx = 0, sy = 0, bx = 0, by = 0, on = false;
+    function down(e) {
+      on = true; sx = e.clientX; sy = e.clientY;
+      var r = box.getBoundingClientRect(); bx = r.left; by = r.top;
+      box.style.right = "auto"; box.style.bottom = "auto";
+      box.style.left = bx + "px"; box.style.top = by + "px";
+      e.preventDefault();
+    }
+    function move(e) {
+      if (!on) { return; }
+      box.style.left = (bx + e.clientX - sx) + "px";
+      box.style.top = (by + e.clientY - sy) + "px";
+    }
+    function up() { on = false; }
+    handle.addEventListener("mousedown", down);
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+  }
+
+  function syncVals() {
+    if (!ui) { return; }
+    var a = isDark() ? st.alphaDark : st.alphaLight;
+    ui.querySelector("#vAlpha").textContent = Number(a).toFixed(2);
+    ui.querySelector("#vBlur").textContent = st.blur + "px";
+    ui.querySelector("#vRadius").textContent = st.radius + "px";
+    ui.querySelector("#vBlob").textContent = Math.round(st.blob * 100) + "%";
+  }
+  function syncUI() {
+    if (!ui) { return; }
+    var dark = isDark();
+    ui.querySelector("#rAlpha").value = dark ? st.alphaDark : st.alphaLight;
+    ui.querySelector("#rBlur").value = st.blur;
+    ui.querySelector("#rRadius").value = st.radius;
+    ui.querySelector("#rBlob").value = st.blob;
+    ui.querySelector("#cHl").checked = !!st.hl;
+    ui.querySelector("#cShadow").checked = !!st.shadow;
+    ui.querySelector("#cBars").checked = !!st.bars;
+    ui.querySelector("#gtMode").textContent = dark ? "深色" : "浅色";
+    syncVals();
+  }
+
+  function refresh() {
+    var glass = DOC.dataset.style === "glass";
+    document.body.classList.toggle("gt-on", glass);
+    if (glass) { apply(); } else { clearAll(); }
+    if (ui) {
+      syncUI();
+      if (!glass) { ui.classList.remove("open"); }
+    }
+  }
+
+  build();
+  refresh();
+  new MutationObserver(refresh).observe(DOC, {
+    attributes: true, attributeFilter: ["data-style", "data-theme"]
+  });
+  if (location.hash === "#gt-open" && ui) { ui.classList.add("open"); }   /* 调试/截图深链 */
+})();
 // 迁移旧主题键 settlement-theme → settings.theme
 try {
   const old = localStorage.getItem('settlement-theme');
   if (old !== null && !settings.theme) { settings.theme = old; saveSettings(settings); }
 } catch(e) {}
-document.documentElement.setAttribute('data-theme', settings.theme || '');
+// URL 测试通道：?theme=dark&style=glass 可直接预览任意组合（截图/验收用，日常无感）
+const _qs = new URLSearchParams(location.search);
+if (_qs.get('theme') !== null) settings.theme = _qs.get('theme');
+if (_qs.get('style') !== null) settings.style = _qs.get('style');
+// 复盘修复（2026-09-30）：区分「从未选过主题」与「明确选了晨曦青('')」——
+// 只有 SET_KEY 里压根没有 theme 键时才落到 paper 默认，显式 '' 尊重原选择。
+let _explicitTheme = null;
+try {
+  const _rawSet = JSON.parse(localStorage.getItem(SET_KEY) || '{}');
+  if ('theme' in _rawSet) _explicitTheme = _rawSet.theme;
+} catch(e) {}
+const _bootTheme = (_qs.get('theme') !== null) ? settings.theme
+  : (_explicitTheme === null ? 'paper' : (settings.theme || ''));
+document.documentElement.setAttribute('data-theme', _bootTheme);
+document.documentElement.setAttribute('data-style', settings.style || 'glass');
 document.getElementById('sortMode').value = settings.defaultSort || 'project';
 render();
 </script>

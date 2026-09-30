@@ -15,7 +15,7 @@
     源变了数据就没了；固定端口保证跨次启动数据不丢。
 
 用法（开发态）：
-    D:\\My-Temporary\\pt-build-env\\Scripts\\python.exe desktop_app.py
+    D:\\Ai-Files\\Agent-Preset\\build-env\\Scripts\\python.exe desktop_app.py
 
 打包：build_exe.py（onedir，html + assets + VERSION 随行进 _internal）
 """
