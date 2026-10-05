@@ -65,9 +65,9 @@ _shots/                     # 界面截图
 ## 打包
 
 ```
-D:\Ai-Files\Agent-Preset\build-env\Scripts\python.exe build_exe.py
+D:\Ai-Files\Tools\BuildEnv\Scripts\python.exe build_exe.py
 ```
 
-输出到 `D:\Ai-Files\Agent-Preset\exe\settlement-tool-v<ver>-<date>\`。
+输出到 `D:\Ai-Files\Tools\Exe\settlement-tool-v<ver>-<date>\`。
 打包依赖：`pywebview`、`pythonnet`（打包环境已装）。
 运行依赖：Windows 自带 WebView2 Runtime（Win11 均有）。
