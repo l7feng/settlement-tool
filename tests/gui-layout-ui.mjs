@@ -1,0 +1,34 @@
+import assert from 'node:assert/strict';
+import {createServer} from 'node:http';
+import {readFile,writeFile,mkdir} from 'node:fs/promises';
+import {resolve,extname,sep} from 'node:path';
+import {pathToFileURL} from 'node:url';
+import {Script} from 'node:vm';
+const web=process.env.SETTLEMENT_WEB_ROOT||'D:/Ai-Files/Tools/Html/settlement-tool';
+const out=process.env.SETTLEMENT_EVIDENCE||'D:/Ai-Files/Repos/GitHub/settlement-tool/build/demo-latest-20261023/tests';await mkdir(out,{recursive:true});
+for(const m of (await readFile(resolve(web,'settlement-workbench.html'),'utf8')).matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi))if(m[1].trim())new Script(m[1]);
+const {chromium}=await import(pathToFileURL('C:/Users/Administrator/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/index.mjs'));
+const server=createServer(async(req,res)=>{try{const file=resolve(web,'.'+new URL(req.url,'http://localhost').pathname);assert.ok(file.startsWith(resolve(web)+sep));res.setHeader('Content-Type',({'.html':'text/html;charset=utf-8','.js':'application/javascript','.svg':'image/svg+xml'}[extname(file)]||'application/octet-stream'));res.end(await readFile(file));}catch{res.writeHead(404);res.end();}});
+await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin='http://127.0.0.1:'+server.address().port;
+const browser=await chromium.launch({headless:true,executablePath:'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'}),context=await browser.newContext({viewport:{width:1440,height:1100},timezoneId:'Asia/Shanghai'});
+await context.route('**/*',r=>r.request().url().startsWith(origin+'/')?r.continue():r.abort());
+const page=await context.newPage();page.setDefaultTimeout(5000);const errors=[],results=[];page.on('pageerror',e=>errors.push(e.message));
+const fixture={prices:{A:{per_min:78,per_ep:78},B:{per_min:30,per_ep:30},C:{per_min:15,per_ep:15},D:{per_min:10,per_ep:10}},projects:[{name:'旧项目',grade:'C',type:'正式',mode:'按时长',episodes:{1:{date:'2026-09-21',duration:'00:01:00',workType:'混音'}}},{name:'精品样本',billingCategory:'premium',grade:'C',type:'正式',mode:'按时长',episodes:{1:{date:'2026-10-20',duration:'00:01:00',grade:'A',type:'Demo',workType:'混音'},2:{date:'2026-10-20',duration:'00:01:00',grade:'C',type:'正式',workType:'混音'},3:{date:'2026-10-20',duration:'00:01:00',grade:'C',type:'正式',workType:'修改'},4:{date:'2026-10-20',duration:'00:01:00',grade:'C',type:'正式',workType:'重混'}}},{name:'自动样本',billingCategory:'automation',grade:'D',type:'正式',mode:'按时长',episodes:{1:{date:'2026-10-20',duration:'00:01:00',type:'Demo',workType:'混音'}}}]};
+await context.addInitScript(data=>{if(!sessionStorage.fixture){localStorage.setItem('settlement_v1',JSON.stringify(data));localStorage.setItem('settlement-settings-v1',JSON.stringify({showCalendar:true,materialReduced:false}));sessionStorage.fixture='yes';}},fixture);
+const reset=()=>page.evaluate(data=>{state.data=normalizeData(data);state.collapsed={};settings.calendarFilters=defaultCalendarFilters();settings.showCalendar=true;dataUndoStack.length=0;closeModal();state.calYear=null;clearRecordFilters();saveData();},fixture);
+const test=async(name,fn)=>{try{await fn();results.push({name,passed:true});console.log('PASS '+name);}catch(error){results.push({name,passed:false,error:error.stack});console.error('FAIL '+name+' '+error.stack);}};
+const makeFiles=paths=>page.evaluate(paths=>{
+ const header=new ArrayBuffer(44),v=new DataView(header),str=(o,s)=>[...s].forEach((c,i)=>v.setUint8(o+i,c.charCodeAt(0)));str(0,'RIFF');v.setUint32(4,960036,true);str(8,'WAVE');str(12,'fmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);v.setUint32(24,8000,true);v.setUint32(28,16000,true);v.setUint16(32,2,true);v.setUint16(34,16,true);str(36,'data');v.setUint32(40,960000,true);
+ window.testMediaFiles=paths.map(path=>{const file=new File([header],path.replace(/\\/g,'/').split('/').at(-1));mediaPaths.set(file,path);return file;});return testMediaFiles.length;
+},paths);
+const clean=()=>page.evaluate(()=>{closeModal();state.data.projects=[];state.displayNumbers=chronologyNumbers();state.selectedDate=null;state.calYear=null;settings.recordSort='episode';settings.calendarFilters=defaultCalendarFilters();dataUndoStack.length=0;clearRecordFilters();saveData();render();});
+const preview=()=>page.evaluate(()=>prepareDemoImport());
+const stored=()=>page.evaluate(()=>JSON.stringify(state.data));
+try{
+await page.goto(origin+'/settlement-workbench.html');
+await test('统计合并且金额默认隐藏',async()=>{assert.equal(await page.locator('#topCards #billingSummary').count(),1);assert.equal(await page.locator('#topCards #filteredTotal').count(),1);assert.equal(await page.locator('#cardFee').textContent(),'••••••');await page.evaluate(()=>guiShowAmount('temporary'));assert.match(await page.locator('#cardFee').textContent(),/¥/);await page.evaluate(()=>guiShowAmount('hide'));assert.equal(await page.locator('#cardFee').textContent(),'••••••');});
+await test('浮动筛选与导航不占列，日历按钮迁移',async()=>{await page.locator('#guiFilters').click();assert.equal(await page.locator('#rightPanel').isVisible(),true);assert.equal(await page.locator('#rightPanel #calendarToggle').count(),1);assert.equal(await page.locator('#rightPanel #calendarFilterButton').count(),1);await page.locator('#rightCollapseBtn').click();await page.locator('#guiNav').click();assert.equal(await page.locator('#leftPanel').isVisible(),true);await page.keyboard.press('Escape');assert.equal(await page.locator('#leftPanel').isVisible(),false);const widths=await page.evaluate(()=>({area:document.getElementById('workArea').clientWidth,content:document.querySelector('.content').clientWidth}));assert.ok(widths.content>widths.area*.9);});
+await test('删除位置及Ctrl日历编辑联动',async()=>{await page.evaluate(()=>{settings.showCalendar=true;document.getElementById('monthFilter').value='2026-10';render();});assert.equal(await page.locator('#recordSortButton + #batchDelBtn').count(),1);const cell=page.locator('.cal-cell[data-date="2026-10-20"]');await cell.click({modifiers:['Control']});await page.getByRole('button',{name:'编辑当天记录',exact:true}).click();assert.ok(await page.locator('.edit-row-check').count()>0);await page.locator('#bc_date').fill('2026-10-21');await page.evaluate(()=>previewCorrection());assert.equal(await page.locator('#correctionConfirm').isDisabled(),false);await page.evaluate(()=>confirmCorrection());assert.equal(await page.evaluate(()=>allEpisodes().filter(e=>e.date==='2026-10-20').length),0);});
+await page.evaluate(()=>closeModal());await page.screenshot({path:out+'/gui.png'});
+await test('没有页面异常',async()=>assert.deepEqual(errors,[]));
+}finally{await writeFile(out+'/results.json',JSON.stringify({results,errors},null,2));await browser.close();await new Promise(r=>server.close(r));}if(results.some(r=>!r.passed))process.exitCode=1;

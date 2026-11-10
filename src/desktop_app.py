@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""短剧混音结算工作台 · 桌面版入口
+"""制作结算台 · 桌面版入口
 
 窗口壳两级回退（2026-09-28 裁决：两个都做，内置回退）：
   1. pywebview（WebView2 内嵌窗口）—— 首选。部分机器上 WebView2 会整块黑屏
@@ -15,17 +15,22 @@
     源变了数据就没了；固定端口保证跨次启动数据不丢。
 
 用法（开发态）：
-    D:\\Ai-Files\\Tools\\BuildEnv\\Scripts\\python.exe desktop_app.py
+    D:\\Ai-Files\\Tools\\BuildEnv\\Scripts\\python.exe src/desktop_app.py
 
-打包：build_exe.py（onedir，html + assets + VERSION 随行进 _internal）
+打包：tools/build_exe.py（onedir，html + assets + VERSION 随行进 _internal）
 """
 import base64
 import ctypes
 import ctypes.wintypes as wt
 import functools
+import hashlib
+import json
+import secrets
+from workspace_store import WorkspaceStore
 import http.server
 import os
 import socketserver
+import socket
 import subprocess
 import sys
 import threading
@@ -34,11 +39,12 @@ import urllib.request
 
 import webview
 
-APP_NAME = '短剧混音结算工作台'
+APP_NAME = '制作结算台'
 PORT_BASE = 26788
 PORT_RANGE = 20          # 26788 ~ 26807
 PING_PATH = '/__app_ping__'
-PING_BODY = b'settlement-tool-ok'
+PING_BODY = b'settlement-tool-workspace-v1'
+WORKSPACE_TOKEN = secrets.token_urlsafe(32)
 # 像素探针阈值：整窗颜色种类少于该值＝页面没画出来（黑屏/白屏）
 MIN_DISTINCT_COLORS = 64
 # 双保险：客户区最主色占比超过该值＝纯底色没渲染（哪怕颜色种类侥幸过线）
@@ -47,12 +53,13 @@ MAX_TOP_RATIO = 0.97
 
 def resource_dir():
     """html / assets / VERSION 所在目录：打包后为 sys._MEIPASS，开发时为脚本目录。"""
-    return getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
+    return getattr(sys, '_MEIPASS', os.environ.get('SETTLEMENT_WEB_ROOT', r'D:\Ai-Files\Tools\Html\settlement-tool'))
 
 
 def read_version():
     try:
-        with open(os.path.join(resource_dir(), 'VERSION'), encoding='utf-8') as f:
+        version_root = resource_dir() if getattr(sys, 'frozen', False) else os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with open(os.path.join(version_root, 'VERSION'), encoding='utf-8') as f:
             return f.read().strip()
     except Exception:
         return '0.0.0'
@@ -63,6 +70,10 @@ VERSION = read_version()
 
 def data_dir():
     """用户数据目录（浏览器 profile / 导出默认位置），与 exe 本体分离，升级不丢数据。"""
+    override = os.environ.get('SETTLEMENT_DATA_ROOT')
+    if override:
+        os.makedirs(override, exist_ok=True)
+        return override
     base = os.environ.get('LOCALAPPDATA') or os.path.expanduser('~')
     d = os.path.join(base, 'SettlementTool')
     os.makedirs(d, exist_ok=True)
@@ -81,11 +92,65 @@ class _Handler(http.server.SimpleHTTPRequestHandler):
         self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
         http.server.SimpleHTTPRequestHandler.end_headers(self)
 
+    def _authorized(self):
+        host = '127.0.0.1:%d' % self.server.server_address[1]
+        origin = self.headers.get('Origin')
+        return (self.headers.get('Host') == host and
+                (not origin or origin == 'http://' + host) and
+                secrets.compare_digest(self.headers.get('X-Settlement-Workspace', ''), WORKSPACE_TOKEN))
+
+    def _json(self, status, value):
+        raw = json.dumps(value, ensure_ascii=False).encode('utf-8')
+        self.send_response(status)
+        self.send_header('Content-Type', 'application/json; charset=utf-8')
+        self.send_header('Content-Length', str(len(raw)))
+        self.end_headers()
+        self.wfile.write(raw)
+
+    def do_POST(self):
+        route = self.path.split('?')[0]
+        if route not in ('/__workspace__', '/__workspace_legacy__') or not self._authorized():
+            return self._json(403, {'error': '工作区请求未授权'})
+        try:
+            length = int(self.headers.get('Content-Length', 0))
+            if length <= 0 or length > 64 * 1024 * 1024:
+                raise ValueError('工作区文件过大或请求为空')
+            value = json.loads(self.rfile.read(length))
+            if route == '/__workspace_legacy__':
+                self.server.workspace.preserve_legacy(value['storage'])
+                return self._json(200, {'ok': True})
+            saved = self.server.workspace.save(value['revision'], value['storage'])
+            return self._json(200, saved)
+        except Exception as error:
+            return self._json(409, {'error': str(error)})
+
     def do_GET(self):
+        route = self.path.split('?')[0]
+        if route == '/__workspace__':
+            if not self._authorized():
+                return self._json(403, {'error': '工作区请求未授权'})
+            try:
+                saved = self.server.workspace.read()
+                saved['path'] = str(self.server.workspace.path)
+                return self._json(200, saved)
+            except Exception as error:
+                return self._json(409, {'error': str(error)})
+        if route == '/assets/desktop-workspace.js':
+            raw = ("window.__settlementWorkspaceToken=" + json.dumps(WORKSPACE_TOKEN) + ";\n").encode('utf-8')
+            with open(os.path.join(self.directory, 'assets', 'desktop-workspace.js'), 'rb') as stream:
+                raw += stream.read()
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/javascript; charset=utf-8')
+            self.send_header('Content-Length', str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+            return
         if self.path.split('?')[0] == PING_PATH:
             self.send_response(200)
             self.send_header('Content-Type', 'text/plain')
             self.send_header('Content-Length', str(len(PING_BODY)))
+            self.send_header('X-Settlement-Version', VERSION)
+            self.send_header('X-Settlement-Workspace-Root', workspace_root_id())
             self.end_headers()
             self.wfile.write(PING_BODY)
             return
@@ -93,15 +158,30 @@ class _Handler(http.server.SimpleHTTPRequestHandler):
 
 
 class _Server(socketserver.ThreadingTCPServer):
-    allow_reuse_address = True
+    allow_reuse_address = False
     daemon_threads = True
+
+    def server_bind(self):
+        # Windows SO_REUSEADDR permits two live listeners on one address.
+        # Use exclusive binding so the version/root probe can actually run.
+        if hasattr(socket, 'SO_EXCLUSIVEADDRUSE'):
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
+
+
+def workspace_root_id():
+    # Do not reuse another version or an isolated test's data server.
+    normalized = os.path.normcase(os.path.realpath(data_dir()))
+    return hashlib.sha256(normalized.encode('utf-8')).hexdigest()
 
 
 def _ping(port):
     """探测某端口上是不是本工具自己的旧实例。"""
     try:
         with urllib.request.urlopen('http://127.0.0.1:%d%s' % (port, PING_PATH), timeout=1.5) as r:
-            return r.read() == PING_BODY
+            return (r.read() == PING_BODY and
+                    r.headers.get('X-Settlement-Version') == VERSION and
+                    r.headers.get('X-Settlement-Workspace-Root') == workspace_root_id())
     except Exception:
         return False
 
@@ -114,10 +194,11 @@ def start_page_server(root):
         try:
             srv = _Server(('127.0.0.1', port), handler)
         except OSError:
-            if i == 0 and _ping(port):
+            if _ping(port):
                 print('[server] 端口 %d 上已有本工具实例，直接复用' % port)
                 return None, port
             continue
+        srv.workspace = WorkspaceStore(data_dir())
         threading.Thread(target=srv.serve_forever, daemon=True).start()
         return srv, port
     raise OSError('端口 %d~%d 全被占用，无法启动页面服务' % (PORT_BASE, PORT_BASE + PORT_RANGE - 1))
@@ -317,7 +398,8 @@ def run_pywebview(url):
 
     storage = os.path.join(data_dir(), 'webview-data')
     os.makedirs(storage, exist_ok=True)
-    webview.start(private_mode=False, storage_path=storage, gui='edgechromium')
+    webview.start(private_mode=False, storage_path=storage, gui='edgechromium',
+                  icon=os.path.join(resource_dir(), 'assets', 'app.ico'))
 
     if 'ok' not in state:          # 探针还没跑完用户就关了窗 → 当作正常使用
         return True
@@ -390,3 +472,4 @@ def main():
 
 if __name__ == '__main__':
     sys.exit(main())
+

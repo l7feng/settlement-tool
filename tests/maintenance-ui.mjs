@@ -1,0 +1,84 @@
+import assert from 'node:assert/strict';
+import {createServer} from 'node:http';
+import {readFile,writeFile,mkdir} from 'node:fs/promises';
+import {resolve,extname,sep} from 'node:path';
+import {pathToFileURL} from 'node:url';
+import {Script} from 'node:vm';
+const web=process.env.SETTLEMENT_WEB_ROOT||'D:/Ai-Files/Tools/Html/settlement-tool';
+const out=process.env.SETTLEMENT_EVIDENCE||'D:/Ai-Files/Repos/GitHub/settlement-tool/build/demo-latest-20261023/tests';await mkdir(out,{recursive:true});
+for(const m of (await readFile(resolve(web,'settlement-workbench.html'),'utf8')).matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi))if(m[1].trim())new Script(m[1]);
+const {chromium}=await import(pathToFileURL('C:/Users/Administrator/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/index.mjs'));
+const server=createServer(async(req,res)=>{try{const file=resolve(web,'.'+new URL(req.url,'http://localhost').pathname);assert.ok(file.startsWith(resolve(web)+sep));res.setHeader('Content-Type',({'.html':'text/html;charset=utf-8','.js':'application/javascript','.svg':'image/svg+xml'}[extname(file)]||'application/octet-stream'));res.end(await readFile(file));}catch{res.writeHead(404);res.end();}});
+await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin='http://127.0.0.1:'+server.address().port;
+const browser=await chromium.launch({headless:true,executablePath:'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'}),context=await browser.newContext({viewport:{width:1440,height:1100},timezoneId:'Asia/Shanghai'});
+await context.route('**/*',r=>r.request().url().startsWith(origin+'/')?r.continue():r.abort());
+const page=await context.newPage();page.setDefaultTimeout(5000);const errors=[],results=[];page.on('pageerror',e=>errors.push(e.message));
+const fixture={prices:{A:{per_min:78,per_ep:78},B:{per_min:30,per_ep:30},C:{per_min:15,per_ep:15},D:{per_min:10,per_ep:10}},projects:[{name:'旧项目',grade:'C',type:'正式',mode:'按时长',episodes:{1:{date:'2026-09-21',duration:'00:01:00',workType:'混音'}}},{name:'精品样本',billingCategory:'premium',grade:'C',type:'正式',mode:'按时长',episodes:{1:{date:'2026-10-20',duration:'00:01:00',grade:'A',type:'Demo',workType:'混音'},2:{date:'2026-10-20',duration:'00:01:00',grade:'C',type:'正式',workType:'混音'},3:{date:'2026-10-20',duration:'00:01:00',grade:'C',type:'正式',workType:'修改'},4:{date:'2026-10-20',duration:'00:01:00',grade:'C',type:'正式',workType:'重混'}}},{name:'自动样本',billingCategory:'automation',grade:'D',type:'正式',mode:'按时长',episodes:{1:{date:'2026-10-20',duration:'00:01:00',type:'Demo',workType:'混音'}}}]};
+await context.addInitScript(data=>{if(!sessionStorage.fixture){localStorage.setItem('settlement_v1',JSON.stringify(data));localStorage.setItem('settlement-settings-v1',JSON.stringify({showCalendar:true,materialReduced:false}));sessionStorage.fixture='yes';}},fixture);
+const reset=()=>page.evaluate(data=>{state.data=normalizeData(data);state.collapsed={};settings.calendarFilters=defaultCalendarFilters();settings.showCalendar=true;dataUndoStack.length=0;closeModal();state.calYear=null;clearRecordFilters();saveData();},fixture);
+const test=async(name,fn)=>{try{await fn();results.push({name,passed:true});console.log('PASS '+name);}catch(error){results.push({name,passed:false,error:error.stack});console.error('FAIL '+name+' '+error.stack);}};
+const makeFiles=paths=>page.evaluate(paths=>{
+ const header=new ArrayBuffer(44),v=new DataView(header),str=(o,s)=>[...s].forEach((c,i)=>v.setUint8(o+i,c.charCodeAt(0)));str(0,'RIFF');v.setUint32(4,960036,true);str(8,'WAVE');str(12,'fmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);v.setUint32(24,8000,true);v.setUint32(28,16000,true);v.setUint16(32,2,true);v.setUint16(34,16,true);str(36,'data');v.setUint32(40,960000,true);
+ window.testMediaFiles=paths.map(path=>{const file=new File([header],path.replace(/\\/g,'/').split('/').at(-1));mediaPaths.set(file,path);return file;});return testMediaFiles.length;
+},paths);
+const clean=()=>page.evaluate(()=>{closeModal();state.data.projects=[];state.displayNumbers=chronologyNumbers();state.selectedDate=null;state.calYear=null;settings.recordSort='episode';settings.calendarFilters=defaultCalendarFilters();dataUndoStack.length=0;clearRecordFilters();saveData();render();});
+const preview=()=>page.evaluate(()=>prepareDemoImport());
+const stored=()=>page.evaluate(()=>JSON.stringify(state.data));try{
+await page.goto(origin+'/settlement-workbench.html');
+const seed=()=>page.evaluate(()=>{
+ closeModal();const record=(episodeNo,date,sourceFile,extra={})=>({episodeNo,date,sourceFile,sourcePath:'/FinalMix/'+sourceFile,label:'EP'+episodeNo,duration:'00:02:00',workType:'混音',...extra});
+ state.data=normalizeData({prices:{A:{per_min:90,per_ep:80},B:{per_min:60,per_ep:50},C:{per_min:30,per_ep:25},D:{per_min:10,per_ep:12}},projects:[{name:'错项目',shortName:'错缩写',billingCategory:'automation',grade:'D',type:'正式',mode:'按时长',episodes:{'5':record('5','2026-10-23','背叛我 05集 1026 V01_Master.wav'),'6':record('6','2026-10-23','背叛我 EP07_1026_V02.wav'),'8':record('8','2026-10-23','背叛我 08集 1026 V01.wav',{workType:'修改'}),'9':{date:'2026-10-01',duration:'00:01:00',workType:'混音',excluded:true,excludeReason:'手动'}}},{name:'Demo',demoBucket:true,billingCategory:'automation',grade:'D',type:'Demo',mode:'按时长',episodes:{a:record(null,'2026-10-23','我的心 Demo 1026 V01.wav',{demoName:'我的心',demoRevision:{take:1,version:1},demoSuperseded:true,excluded:true,excludeReason:'Demo旧版本（仅最新版计费）'}),b:record(null,'2026-10-24','我的心 Demo 1024 V02.wav',{demoName:'我的心',demoRevision:{take:1,version:2}})}}]});
+ state.selectedDate=null;state.collapsed={};dataUndoStack.length=0;settings.showCalendar=false;settings.showSuperseded=true;clearRecordFilters();saveData();render();
+});
+await test('文件规则：集数、项目、六位项目日期及分隔月日',async()=>{
+ const x=await page.evaluate(()=>['24-三胞胎D_261026_7F/FinalMix/EP01_1026_V02.wav','/共享文件夹/背叛我 05集 1026 V01_Master.wav','/FinalMix/我的心 一 Demo 1026 V02.wav'].map(path=>({meta:SettlementImportMetadata.infer(path,[]),info:SettlementImportMetadata.sourceInfo(path,2026)})));
+ assert.equal(x[0].meta.name,'三胞胎');assert.equal(x[0].meta.grade,'D');assert.equal(x[0].info.episodeNo,'1');assert.equal(x[0].info.date,'2026-10-26');assert.equal(x[1].meta.name,'背叛我');assert.equal(x[2].meta.name,'我的心');
+});
+await test('导入自动日期共用解析：1026不再使用默认1023',async()=>{
+ const x=await page.evaluate(()=>{const scan=scanFiles([{name:'背叛我 EP05_1026_V02.wav'}]);const c=Object.values(scan.parsed)[0];return {ep:c.episodeNo,...deliveryDateInfo(c,{date:'2026-10-23'})};});assert.deepEqual(x,{ep:'5',date:'2026-10-26',dateSource:'month-day-inferred-year'});
+});
+await test('校准先扫描并逐字段预览，取消不改账目',async()=>{
+ await seed();const before=await stored();await page.locator('#inlineMaintenance [onclick="openCalibration()"]').click();const x=await page.evaluate(()=>({total:_calibration.total,missing:_calibration.missing,fields:_calibration.rows.flatMap(r=>r.changes.map(c=>c.field))}));assert.equal(x.total,6);assert.equal(x.missing,1);assert.ok(x.fields.includes('date')&&x.fields.includes('projectName')&&x.fields.includes('episodeNo'));await page.screenshot({path:out+'/calibration.png'});assert.equal(await stored(),before);await page.getByRole('button',{name:'关闭',exact:true}).click();assert.equal(await stored(),before);
+});
+await test('校准提交日期集数项目，ID保留、修改零金额、关联Demo仍按最高V计费，整批撤销',async()=>{
+ await page.evaluate(()=>openCalibration());const before=await stored(),ids=await page.evaluate(()=>allEpisodes().map(e=>e.proj.episodes[e.epNo].recordId).sort());await page.evaluate(()=>previewCalibration());assert.equal(await page.locator('#calibrationConfirm').isEnabled(),true);await page.evaluate(()=>confirmCalibration());
+ const x=await page.evaluate(()=>{const p=state.data.projects.find(p=>p.name==='背叛我'),d=state.data.projects.find(p=>p.demoBucket);return {date:p.episodes[5].date,ep:p.episodes[6].episodeNo,fee:feeOf(p,p.episodes[8]),old:d.episodes.a.demoSuperseded,new:d.episodes.b.demoSuperseded,ids:allEpisodes().map(e=>e.proj.episodes[e.epNo].recordId).sort(),valid:validateBackup(backupEnvelope(state.data)).ok};});assert.equal(x.date,'2026-10-26');assert.equal(x.ep,'7');assert.equal(x.fee,0);assert.equal(x.old,true);assert.equal(x.new,undefined);assert.deepEqual(x.ids,ids);assert.equal(x.valid,true);await page.evaluate(()=>undoDataChange());assert.equal(await stored(),before);
+});
+await test('失效预览、非法日期、多候选不猜测',async()=>{
+ await seed();const x=await page.evaluate(()=>({invalid:SettlementImportMetadata.sourceInfo('背叛我 05集_0230_V01.wav',2026),multi:SettlementImportMetadata.sourceInfo('背叛我 05集_20261025_20261026.wav',2026),scan:buildCalibrationScan([{projName:'错项目',epNo:'9'}],['背叛我 9集 1026 V01.wav','背叛我 9集 1027 V02.wav']).rows[0]}));assert.equal(x.invalid.date,null);assert.equal(x.multi.date,null);assert.ok(x.scan.notes.some(n=>n.includes('无来源')));
+ await page.evaluate(()=>{openCalibration();previewCalibration();state.data.projects[0].episodes[5].duration='00:03:00';});const changed=await stored();await page.evaluate(()=>confirmCalibration());assert.equal(await stored(),changed);assert.match(await page.locator('#calibrationPreview').innerText(),/账目已变化/);
+});
+await test('选择文件夹按唯一项目集数匹配历史无来源记录，不靠文件时间',async()=>{
+ await seed();const x=await page.evaluate(()=>{const p=state.data.projects[0];p.name='背叛我';return buildCalibrationScan([{projName:p.name,epNo:'9'}],['FinalMix/背叛我 9集 1026 V01.wav']);});assert.equal(x.rows[0].matched,true);assert.ok(x.rows[0].changes.some(c=>c.field==='date'&&c.after==='2026-10-26'));
+ const y=await page.evaluate(()=>buildCalibrationScan([{projName:'背叛我',epNo:'9'}],['a/背叛我 9集 1026 V01.wav','b/背叛我 9集 1026 V02.wav']));assert.ok(y.rows[0].notes.some(n=>n.includes('无来源')));assert.equal(y.rows[0].changes.length,0);
+});
+await test('批量编辑页面可全不选、多选字段并保留未指定项',async()=>{
+ await seed();const before=await stored();await page.locator('#inlineMaintenance').getByRole('button',{name:'批量编辑',exact:true}).click();assert.equal(await page.locator('.edit-row-check').count(),6);await page.getByRole('button',{name:'全不选',exact:true}).click();await page.evaluate(()=>document.querySelectorAll('.edit-project').forEach(el=>el.open=true));await page.locator('.maintenance-pick-list label').filter({hasText:'EP5'}).locator('input').check();await page.locator('.maintenance-pick-list label').filter({hasText:'EP6'}).locator('input').check();await page.evaluate(()=>document.querySelectorAll('.edit-project,.bulk-edit-fields').forEach(el=>el.open=true));await page.locator('#bc_date').fill('2026-10-27');await page.locator('#bc_mode').selectOption('按集');await page.evaluate(()=>previewCorrection());assert.equal(await page.locator('#correctionConfirm').isEnabled(),true);await page.screenshot({path:out+'/batch-editor.png'});await page.evaluate(()=>confirmCorrection());const x=await page.evaluate(()=>Object.values(state.data.projects[0].episodes).map(r=>[r.date,r.mode,r.duration]));assert.deepEqual(x[0],['2026-10-27','按集','00:02:00']);assert.deepEqual(x[1],x[0]);assert.equal(x[2][0],'2026-10-23');await page.evaluate(()=>undoDataChange());assert.equal(await stored(),before);
+});
+await test('批量整组更名保留项目ID，部分归入项目保留记录ID和继承单价',async()=>{
+ await seed();const result=await page.evaluate(()=>{const p=state.data.projects[0],items=Object.keys(p.episodes).map(epNo=>({projName:p.name,epNo})),all=buildBatchCorrection(items,{projectName:'正确项目'}),some=buildBatchCorrection([items[0]],{projectName:'分离项目',episodeNo:'12'}),target=some.next.projects.find(p=>p.name==='分离项目');return {oldId:p.id,newId:all.next.projects[0].id,aliases:all.next.projects[0].aliases,oldRecord:p.episodes[5].recordId,newRecord:target.episodes[5].recordId,number:target.episodes[5].episodeNo,fee:feeOf(target,target.episodes[5]),valid:validateBackup(some.next).ok};});assert.equal(result.oldId,result.newId);assert.ok(result.aliases.includes('错项目'));assert.equal(result.oldRecord,result.newRecord);assert.equal(result.number,'12');assert.equal(result.fee,20);assert.equal(result.valid,true);
+});
+await test('单条编辑中提供多选入口，正式集数与Demo名称分开',async()=>{
+ await seed();await page.evaluate(()=>openEditEp('错项目','5'));await page.getByRole('button',{name:'多选批量编辑',exact:true}).click();assert.equal(await page.locator('.edit-row-check').count(),6);await page.evaluate(()=>{closeModal();switchTab('byProject');});const headings=await page.locator('#view-byProject th').allTextContents();assert.ok(headings.includes('集数')&&!headings.includes('名称'));assert.match(await page.locator('#view-byProject').textContent(),/《错项目》/);assert.doesNotMatch(await page.locator('#view-byProject').textContent(),/《错缩写》/);
+});
+await test('两套总额先对比、未提交不改账目，按集/分钟切换和撤销',async()=>{
+ await seed();const before=await stored();await page.locator('#billingCompareButton').click();let t=await page.evaluate(()=>_billingComparison.totals);assert.deepEqual(t,{time:60,episode:36,current:60});assert.equal(await stored(),before);await page.screenshot({path:out+'/billing-comparison.png'});await page.getByRole('button',{name:'全部改为按集数',exact:true}).click();assert.equal(await page.evaluate(()=>backupStats(state.data).amount),36);assert.equal(await page.evaluate(()=>allEpisodes().every(e=>e.mode==='按集')),true);assert.equal(await page.evaluate(()=>feeOf(state.data.projects[0],state.data.projects[0].episodes[8])),0);await page.evaluate(()=>{openBillingComparison();applyBillingComparison('按时长');});assert.equal(await page.evaluate(()=>backupStats(state.data).amount),60);await page.evaluate(()=>{undoDataChange();undoDataChange();});assert.equal(await stored(),before);
+});
+await test('比较范围、重复等级分类选中去重、旧预览不提交',async()=>{
+ await seed();await page.evaluate(()=>{document.getElementById('projFilter').value='错项目';render();openBillingComparison('filtered');});assert.equal(await page.evaluate(()=>_billingComparison.items.length),4);await page.evaluate(()=>{closeModal();clearRecordFilters();switchTab('byGrade');toggleSelAll({checked:true});openBillingComparison('selected');});assert.equal(await page.evaluate(()=>_billingComparison.items.length),6);await page.evaluate(()=>state.data.prices.D.per_ep=100);const before=await stored();await page.evaluate(()=>applyBillingComparison('按集'));assert.equal(await stored(),before);
+});
+await test('校准取消字段及编辑后预览失效',async()=>{
+ await seed();await page.evaluate(()=>{openCalibration();selectCalibrationChanges(false);});await page.locator('.calibration-change').first().check();await page.evaluate(()=>previewCalibration());await page.locator('.calibration-change').first().uncheck();assert.equal(await page.locator('#calibrationConfirm').isDisabled(),true);await page.evaluate(()=>openBatchCorrection([{projName:'错项目',epNo:'5'}]));await page.evaluate(()=>document.querySelectorAll('.edit-project,.bulk-edit-fields').forEach(el=>el.open=true));await page.locator('#bc_date').fill('2026-10-27');await page.evaluate(()=>previewCorrection());await page.locator('#bc_projectName').fill('新名称');assert.equal(await page.locator('#correctionConfirm').isDisabled(),true);
+});
+await test('Demo显示EP01和作品项目名，第一版V01简洁、后续版备注下移',async()=>{
+ await seed();await page.evaluate(()=>{const p=state.data.projects.find(p=>p.demoBucket);p.episodes.b.demoRevision={take:2,version:3};render();switchTab('byProject');document.querySelectorAll('#view-byProject details').forEach(el=>el.open=true);});
+ const rows=await page.locator('#view-byProject .record-project').evaluateAll(els=>els.filter(el=>el.childNodes[0].textContent==='《我的心》').map(el=>({project:el.childNodes[0].textContent,note:[...el.querySelectorAll('small')].map(x=>x.textContent),episode:el.parentElement.querySelector('.record-name').textContent})));
+ assert.deepEqual(rows,[{project:'《我的心》',note:[],episode:'EP01'},{project:'《我的心》',note:['第二版','V03'],episode:'EP01'}]);
+ await page.locator('#view-byProject .record-project').last().scrollIntoViewIfNeeded();await page.screenshot({path:out+'/demo-episode-project.png'});
+});
+await test('无版本来源的历史类型纠正不猜测版本、非法跨类别整批拒绝',async()=>{
+ await seed();const x=await page.evaluate(()=>{const original=JSON.stringify(state.data);let rejected=false;try{buildBatchCorrection([{projName:'错项目',epNo:'5'}],{grade:'A'});}catch{rejected=true;}state.data.projects[0].episodes[9].excluded=false;const plan=buildBatchCorrection([{projName:'错项目',epNo:'9'}],{type:'Demo'});return {rejected,legacyBillable:plan.next.projects[0].episodes[9].excluded===false,hasVersion:!!plan.next.projects[0].episodes[9].demoRevision};});assert.deepEqual(x,{rejected:true,legacyBillable:true,hasVersion:false});
+});
+await test('全程没有页面运行异常',async()=>assert.deepEqual(errors,[]));
+}finally{await writeFile(out+'/results.json',JSON.stringify({results,errors,passed:results.filter(x=>x.passed).length,total:results.length},null,2));await browser.close();await new Promise(r=>server.close(r));}
+console.log('RESULT '+results.filter(x=>x.passed).length+'/'+results.length);if(results.some(x=>!x.passed))process.exitCode=1;

@@ -6,10 +6,10 @@
 WebView2 互操作 dll 带上，再用 desktop_app.py 当入口（pywebview 黑屏时自动切 Edge --app）。
 
 用法（在打包环境里跑）：
-    D:\\My-Temporary\\pt-build-env\\Scripts\\python.exe build_exe.py
+    D:\\My-Temporary\\pt-build-env\\Scripts\\python.exe tools/build_exe.py
 
 出口布局（扁平化）：
-    <EXE_ROOT>/settlement-tool-v<版本>-<日期>/
+    <EXE_ROOT>/05-制作结算台/settlement-tool-v<版本>/
         settlement-tool.exe   +  _internal/
 """
 import datetime
@@ -18,7 +18,8 @@ import shutil
 import subprocess
 import sys
 
-ROOT = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+WEB_ROOT = os.environ.get('SETTLEMENT_WEB_ROOT', r'D:\Ai-Files\Tools\Html\settlement-tool')
 PY = r'D:\Ai-Files\Tools\BuildEnv\Scripts\python.exe'
 EXE_ROOT = r'D:\Ai-Files\Tools\Exe'
 
@@ -27,13 +28,13 @@ with open(os.path.join(ROOT, 'VERSION'), encoding='utf-8') as f:
 DATE = datetime.datetime.now().strftime('%Y%m%d')
 
 NAME = 'settlement-tool'
-DIST = os.path.join(EXE_ROOT, '%s-v%s-%s' % (NAME, VERSION, DATE))
+DIST = os.path.join(EXE_ROOT, '05-制作结算台', 'settlement-tool-v%s' % VERSION)
 WORK = os.path.join(ROOT, 'build', 'work')
 SPEC = os.path.join(ROOT, 'build')
 # staging：PyInstaller 先建到这里，再把内容整体移入 DIST（扁平化，无嵌套子目录）
 STAGING = os.path.join(ROOT, 'build', 'staging')
-ENTRY = os.path.join(ROOT, 'desktop_app.py')
-ICON = os.path.join(ROOT, 'assets', 'app.ico')
+ENTRY = os.path.join(ROOT, 'src', 'desktop_app.py')
+ICON = os.path.join(WEB_ROOT, 'assets', 'app.ico')
 
 # 打包后必须在 _internal 里存在的东西，缺一个 exe 就白屏或功能缺失
 MUST_HAVE = [
@@ -70,8 +71,8 @@ def main():
         '--name', NAME,
         '--icon', ICON,
         # 网页本体与离线依赖
-        '--add-data', os.path.join(ROOT, 'settlement-workbench.html') + os.pathsep + '.',
-        '--add-data', os.path.join(ROOT, 'assets') + os.pathsep + 'assets',
+        '--add-data', os.path.join(WEB_ROOT, 'settlement-workbench.html') + os.pathsep + '.',
+        '--add-data', os.path.join(WEB_ROOT, 'assets') + os.pathsep + 'assets',
         '--add-data', os.path.join(ROOT, 'VERSION') + os.pathsep + '.',
         # pywebview：lib/*.dll（WebView2 互操作）+ js 注入脚本
         '--collect-data', 'webview',
@@ -108,7 +109,9 @@ def main():
     # 旧产物改名保留（不删除）
     if os.path.isdir(DIST):
         run_id = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
-        prev = DIST + '.prev-' + run_id
+        archive = os.path.join(EXE_ROOT, '00-归档')
+        os.makedirs(archive, exist_ok=True)
+        prev = os.path.join(archive, os.path.basename(DIST) + '-重建前-' + run_id + '-' + datetime.datetime.now().strftime('%f'))
         os.rename(DIST, prev)
         print('[keep] 旧产物已改名保留: %s' % prev)
 

@@ -1,0 +1,44 @@
+import {createServer} from 'node:http';
+import {readFile,mkdir} from 'node:fs/promises';
+import {resolve,extname} from 'node:path';
+import {pathToFileURL} from 'node:url';
+const web='D:/Ai-Files/Tools/Html/settlement-tool';
+const out='D:/Ai-Files/Repos/GitHub/settlement-tool/build/diag-20261030';
+await mkdir(out,{recursive:true});
+const server=createServer(async(req,res)=>{try{const file=resolve(web,'.'+new URL(req.url,'http://localhost').pathname);res.setHeader('Content-Type',({'.html':'text/html;charset=utf-8','.js':'application/javascript'}[extname(file)]||'application/octet-stream'));res.end(await readFile(file));}catch{res.writeHead(404);res.end();}});
+await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin='http://127.0.0.1:'+server.address().port;
+const {chromium}=await import(pathToFileURL('C:/Users/Administrator/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/index.mjs'));
+const browser=await chromium.launch({headless:true,executablePath:'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'});
+const context=await browser.newContext({viewport:{width:1440,height:1100},timezoneId:'Asia/Shanghai'});
+await context.route('**/*',r=>r.request().url().startsWith(origin+'/')?r.continue():r.abort());
+const page=await context.newPage();page.setDefaultTimeout(8000);
+const errors=[];page.on('pageerror',e=>errors.push(e.message));
+await context.addInitScript(()=>{localStorage.setItem('settlement-settings-v1',JSON.stringify({showCalendar:true,materialReduced:false}));});
+await page.goto(origin+'/settlement-workbench.html');
+const ws=JSON.parse(await readFile('C:/Users/Administrator/AppData/Local/SettlementTool/workspace.json','utf8'));
+const data=JSON.parse(ws.storage['settlement_v1']);
+await page.evaluate(d=>{localStorage.setItem('settlement_v1',JSON.stringify(d));},data);
+await page.reload();await page.waitForTimeout(400);
+console.log('filters',await page.evaluate(()=>Object.fromEntries(['monthFilter','projFilter','gradeFilter','modeFilter','epFilter','typeFilter','workFilter','billingFilter','dateStart','dateEnd'].map(id=>[id,document.getElementById(id).value]))));
+console.log('selectedDate',await page.evaluate(()=>state.selectedDate));
+console.log('summary card',await page.evaluate(()=>document.getElementById('billingSummary')?.textContent));
+await page.evaluate(()=>{switchTab('byProject');});
+await page.waitForTimeout(200);
+const rows=await page.evaluate(()=>{
+  const el=[...document.querySelectorAll('#view-byProject details')].find(d=>d.querySelector('summary')?.textContent.includes('打破她的贞洁誓言'));
+  return {summary:el?.querySelector('summary').innerText, rows:[...el.querySelectorAll('tbody tr')].map(tr=>[...tr.querySelectorAll('td')].map(td=>td.textContent.trim()).join(' | '))};
+});
+console.log('GROUP SUMMARY:',rows.summary);
+console.log('GROUP ROWS (first 20):');rows.rows.slice(0,20).forEach(r=>console.log('  ',r));
+console.log('total rows',rows.rows.length);
+// now without month filter
+await page.evaluate(()=>{clearRecordFilters();});
+await page.waitForTimeout(200);
+const rows2=await page.evaluate(()=>{
+  const el=[...document.querySelectorAll('#view-byProject details')].find(d=>d.querySelector('summary')?.textContent.includes('打破她的贞洁誓言'));
+  return {summary:el?.querySelector('summary').innerText, n:el.querySelectorAll('tbody tr').length};
+});
+console.log('AFTER CLEAR FILTERS:',rows2);
+console.log('ERRORS',errors);
+await page.screenshot({path:out+'/byproject.png'});
+await browser.close();await new Promise(r=>server.close(r));

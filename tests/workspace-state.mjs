@@ -1,0 +1,47 @@
+import {webRoot,webRootURL,testOutputRoot} from './web-root.mjs';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+await import(new URL('assets/workspace-state.js',webRootURL).href);
+const W=globalThis.SettlementWorkspace,K=W.KEYS;
+const timer=setTimeout(()=>{console.error('工作区测试超时');process.exit(1);},60000);
+const results=[];
+function test(name,fn){fn();results.push({name,passed:true});}
+class Storage {
+ constructor(initial={}){this.values=new Map(Object.entries(initial));this.fail=()=>false;}
+ getItem(k){if(this.fail('get',k))throw new Error('read failed');return this.values.get(k)??null;}
+ setItem(k,v){if(this.fail('set',k))throw new Error('write failed');this.values.set(k,String(v));}
+ removeItem(k){if(this.fail('remove',k))throw new Error('remove failed');this.values.delete(k);}
+}
+const prefs={formatVersion:1,settings:{confirmDel:true,defaultSort:'time',weekStart:'mon',hideEmpty:true,freezeLevel:'actions',freezeTopPanel:true,topCollapsed:['cards'],sideCollapsed:{left:false,right:true},topOpacity:.88,viewPreset:'review',favoriteThemes:['claude','dark'],theme:'claude',style:'glass',materialReduced:false,settlementCycle:'half',sideWidths:{left:240,right:360},customWorkspace:{freezeLevel:'full',topCollapsed:[],sideCollapsed:{left:false,right:false}}},columns:{order:['proj','epNo','fee'],hidden:{date:true}},theme:'claude',glass:{schema:2,blur:6,radius:22,blob:1,hl:1,shadow:1,bars:1,alphaLight:.82,alphaDark:.82}};
+test('偏好完整往返',()=>{const s=new Storage();W.writePreferences(s,prefs);assert.deepEqual(W.capturePreferences(s),prefs);});
+test('业务与偏好一次提交并完整撤销',()=>{const s=new Storage({[K.business]:'old'}),r=W.writeBundle(s,{businessRaw:'new',preferences:prefs});assert.equal(s.getItem(K.business),'new');W.restoreBundle(s,r.before);assert.equal(s.getItem(K.business),'old');assert.equal(s.getItem(K.settings),null);});
+test('空偏好仅提交业务',()=>{const s=new Storage({[K.settings]:'existing'});W.writeBundle(s,{businessRaw:'new',preferences:null});assert.equal(s.getItem(K.settings),'existing');});
+test('完整偏好恢复清除源缺失玻璃并撤销恢复原文',()=>{const oldGlass=JSON.stringify(prefs.glass),s=new Storage({[K.business]:'old',[K.glass]:oldGlass,[K.theme]:'dark'});const r=W.writeBundle(s,{businessRaw:'new',preferences:{formatVersion:1,settings:{theme:'claude'}}});assert.equal(s.getItem(K.glass),null);assert.equal(s.getItem(K.theme),null);W.restoreBundle(s,r.before);assert.equal(s.getItem(K.glass),oldGlass);assert.equal(s.getItem(K.theme),'dark');assert.equal(s.getItem(K.business),'old');});
+test('未知偏好字段拒绝',()=>assert.throws(()=>W.validatePreferences({...prefs,credentials:'secret'}),/不支持字段/));
+test('未来偏好版本拒绝',()=>assert.throws(()=>W.validatePreferences({...prefs,formatVersion:99}),/版本/));
+test('原型攻击字段拒绝',()=>assert.throws(()=>W.validatePreferences(JSON.parse('{"formatVersion":1,"settings":{"__proto__":{"polluted":true}}}')),/不支持字段/));
+test('危险临时删除开关和路径不进入备份',()=>{const s=new Storage({[K.settings]:JSON.stringify({...prefs.settings,delMode:true,hoverDel:true,path:'C:/private',token:'secret'})});assert.deepEqual(W.capturePreferences(s).settings,prefs.settings);});
+test('业务恢复键不递归进入偏好',()=>{const s=new Storage({'settlement_recovery_v2':'private',another_key:'credentials'});assert.deepEqual(W.capturePreferences(s),{formatVersion:1});});
+test('设置非法类型和无穷数拒绝',()=>{assert.throws(()=>W.validatePreferences({formatVersion:1,settings:{topOpacity:Infinity}}));assert.throws(()=>W.validatePreferences({formatVersion:1,settings:{confirmDel:'false'}}));});
+test('未知嵌套侧栏字段拒绝',()=>assert.throws(()=>W.validatePreferences({formatVersion:1,settings:{sideWidths:{left:200,path:'secret'}}})));
+test('未来玻璃版本拒绝',()=>assert.throws(()=>W.validatePreferences({formatVersion:1,glass:{schema:9}})));
+test('旧玻璃参数受限迁移',()=>{const s=new Storage({[K.glass]:JSON.stringify({schema:1,blur:50,radius:0,blob:3,alphaLight:.1,alphaDark:3,hl:true,shadow:false,bars:1})});const g=W.capturePreferences(s).glass;assert.equal(g.schema,2);assert.equal(g.blur,8);assert.equal(g.radius,16);assert.equal(g.alphaLight,.55);});
+test('损坏存储读取不吞异常',()=>{const s=new Storage({[K.settings]:'bad'});assert.throws(()=>W.capturePreferences(s));s.fail=op=>op==='get';assert.throws(()=>W.capturePreferences(s),/read failed/);});
+test('提交失败回滚原文与空键',()=>{const s=new Storage({[K.business]:'old'});let failed=false;s.fail=(op,k)=>op==='set'&&k===K.business&&!failed&&(failed=true);assert.throws(()=>W.writeBundle(s,{businessRaw:'new',preferences:prefs}),e=>e.rollbackFailed===false);assert.equal(s.getItem(K.business),'old');assert.equal(s.getItem(K.settings),null);assert.equal(s.getItem(K.journal),null);});
+test('持久写故障保留日志并明确回滚失败',()=>{const s=new Storage({[K.business]:'old',[K.settings]:'old-settings'});s.fail=(op,k)=>op==='set'&&k===K.business;assert.throws(()=>W.writeBundle(s,{businessRaw:'new',preferences:prefs}),e=>e.rollbackFailed===true);assert.ok(s.getItem(K.journal));s.fail=()=>false;assert.equal(W.recoverInterrupted(s).recovered,true);assert.equal(s.getItem(K.settings),'old-settings');assert.equal(s.getItem(K.business),'old');});
+test('日志写失败不改变任何业务偏好',()=>{const s=new Storage({[K.business]:'old'});s.fail=(op,k)=>op==='set'&&k===K.journal;assert.throws(()=>W.writeBundle(s,{businessRaw:'new',preferences:prefs}));assert.equal(s.getItem(K.business),'old');assert.equal(s.getItem(K.settings),null);});
+test('中断日志启动恢复且幂等',()=>{const s=new Storage({[K.business]:'partially-written',[K.journal]:JSON.stringify({formatVersion:1,before:{[K.business]:'original',[K.theme]:null}}),[K.theme]:'dark'});assert.equal(W.recoverInterrupted(s).recovered,true);assert.equal(s.getItem(K.business),'original');assert.equal(s.getItem(K.theme),null);assert.equal(W.recoverInterrupted(s).recovered,false);});
+test('未恢复日志阻止新提交',()=>{const s=new Storage({[K.journal]:'broken'});assert.throws(()=>W.writePreferences(s,prefs),/先恢复/);});
+test('恶意恢复日志不得删除任意键',()=>{const s=new Storage({arbitrary:'keep',[K.journal]:JSON.stringify({formatVersion:1,before:{arbitrary:null}})});assert.throws(()=>W.recoverInterrupted(s));assert.equal(s.getItem('arbitrary'),'keep');});
+test('空设备不生成升级快照',()=>{const s=new Storage();assert.equal(W.createUpgradeSnapshot(s,'2.5.0').created,false);assert.deepEqual(W.listUpgradeSnapshots(s),[]);});
+test('空设备记录版本，首次数据重启不误生成升级快照',()=>{const s=new Storage();W.createUpgradeSnapshot(s,'2.5.0');s.setItem(K.business,'user-data');assert.equal(W.createUpgradeSnapshot(s,'2.5.0').created,false);assert.equal(W.listUpgradeSnapshots(s).length,0);assert.equal(W.createUpgradeSnapshot(s,'2.5.1').created,true);assert.equal(W.listUpgradeSnapshots(s).length,1);assert.equal(W.listUpgradeSnapshots(s)[0].raw[K.business],'user-data');});
+test('快照列表拒绝恶意编号和无效日期',()=>{const s=new Storage({[K.business]:'old'});W.createUpgradeSnapshot(s,'2.5.0');const h=JSON.parse(s.getItem(K.upgrades));h.snapshots[0].id='bad\nname';s.setItem(K.upgrades,JSON.stringify(h));assert.throws(()=>W.listUpgradeSnapshots(s));h.snapshots[0].id='normal';h.snapshots[0].createdAt='invalid';s.setItem(K.upgrades,JSON.stringify(h));assert.throws(()=>W.listUpgradeSnapshots(s));});
+test('版本快照幂等并保留最初原文及全部历史',()=>{const s=new Storage({[K.business]:'original','settlement_recovery_v2':'protected'});assert.equal(W.createUpgradeSnapshot(s,'2.5.0').created,true);assert.equal(W.createUpgradeSnapshot(s,'2.5.0').created,false);for(let i=1;i<=7;i++){s.setItem(K.business,'new-'+i);W.createUpgradeSnapshot(s,'2.5.'+i);}const h=W.listUpgradeSnapshots(s);assert.equal(h.length,8);assert.equal(h.at(-1).raw[K.business],'original');assert.equal(s.getItem('settlement_recovery_v2'),'protected');});
+test('快照写失败不改旧快照或业务',()=>{const s=new Storage({[K.business]:'original'});W.createUpgradeSnapshot(s,'2.5.0');const old=s.getItem(K.upgrades);s.fail=(op,k)=>op==='set'&&k===K.upgrades;assert.throws(()=>W.createUpgradeSnapshot(s,'2.5.1'));assert.equal(s.getItem(K.upgrades),old);assert.equal(s.getItem(K.business),'original');});
+test('可读快照导出业务及完整偏好',()=>{const s=new Storage();W.writeBundle(s,{businessRaw:JSON.stringify({schemaVersion:3,projects:[]}),preferences:prefs});W.createUpgradeSnapshot(s,'2.5.0');const output=W.exportUpgradeSnapshot(W.listUpgradeSnapshots(s)[0]);assert.equal(output.kind,'backup');assert.deepEqual(output.envelope.preferences,prefs);assert.equal(output.envelope.data.schemaVersion,3);});
+test('损坏原文快照仍可导出原文',()=>{const s=new Storage({[K.business]:'damaged'});W.createUpgradeSnapshot(s,'2.5.0');const o=W.exportUpgradeSnapshot(W.listUpgradeSnapshots(s)[0]);assert.equal(o.kind,'raw-original');assert.equal(JSON.parse(o.raw).raw[K.business],'damaged');});
+test('未来升级索引不被覆盖',()=>{const s=new Storage({[K.upgrades]:JSON.stringify({formatVersion:9,snapshots:[]}),[K.business]:'old'});assert.throws(()=>W.createUpgradeSnapshot(s,'2.5.0'));assert.equal(JSON.parse(s.getItem(K.upgrades)).formatVersion,9);});
+test('界面语言和缩放偏好合法往返与边界校验',()=>{const s=new Storage(),p={formatVersion:1,settings:{uiLanguage:'en',layoutZoom:1.25}};W.writePreferences(s,p);assert.deepEqual(W.capturePreferences(s),p);for(const settings of [{uiLanguage:'fr'},{layoutZoom:.69},{layoutZoom:1.51},{layoutZoom:NaN}])assert.throws(()=>W.validatePreferences({formatVersion:1,settings}));});
+clearTimeout(timer);
+fs.mkdirSync(testOutputRoot,{recursive:true});fs.writeFileSync(testOutputRoot+'/workspace-tests.json',JSON.stringify({passed:results.length,failed:0,results},null,2));
+console.log(`工作区偏好/事务/升级快照 ${results.length}/${results.length} 通过`);
