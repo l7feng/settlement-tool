@@ -45,6 +45,13 @@ class WorkspaceTests(unittest.TestCase):
         for values in [{'secret':'x'},{'settlement_v1':{}}]:
             with self.assertRaises(ValueError):self.store.save(0,values)
         self.assertFalse(self.store.path.exists())
+    def test_ledger_keys(self):
+        values={**self.values,'settlement_v1_profile_job':'{"projects": []}'}
+        self.store.save(0,values)
+        self.assertEqual(self.store.read()['storage'],values)
+        for bad in ('settlement_v1_profile_','settlement_v1_profile_a/b',
+                    'settlement_v1_profile_'+'a'*65,'settlement_v1_profile_job.old'):
+            with self.assertRaises(ValueError):self.store.validate({bad:'{}'})
     def test_different_browser_preserved_once(self):
         self.store.save(0,self.values)
         old={'settlement_v1':'old raw'}

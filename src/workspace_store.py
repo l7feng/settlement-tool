@@ -2,6 +2,7 @@
 import hashlib
 import json
 import os
+import re
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
@@ -11,6 +12,7 @@ import time
 KEYS = frozenset(('settlement_v1', 'settlement_recovery_v2', 'settlement-settings-v1',
     'settlement-cols-v1', 'settlement-theme', 'settlement-glass-tuner',
     'settlement-workspace-journal-v1', 'settlement-upgrade-snapshots-v1'))
+LEDGER_KEY = re.compile(r'^settlement_(?:v1|recovery_v2)_profile_[A-Za-z0-9_-]{1,64}$')
 
 
 class WorkspaceStore:
@@ -20,8 +22,14 @@ class WorkspaceStore:
         self.lock = threading.RLock()
 
     @staticmethod
-    def validate(values):
-        if not isinstance(values, dict) or any(k not in KEYS or not isinstance(v, str) for k, v in values.items()):
+    def managed(key):
+        return key in KEYS or bool(LEDGER_KEY.match(key))
+
+    @classmethod
+    def validate(cls, values):
+        if not isinstance(values, dict) or any(
+                not isinstance(k, str) or not cls.managed(k) or not isinstance(v, str)
+                for k, v in values.items()):
             raise ValueError('工作区字段无效')
         # Business validation and schema migration remain in the existing UI layer.
         return values

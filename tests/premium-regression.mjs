@@ -10,7 +10,7 @@ const {chromium}=await import(pathToFileURL(process.env.SETTLEMENT_PLAYWRIGHT||'
 await mkdir(output,{recursive:true});
 const source=await readFile(resolve(web,'settlement-workbench.html'),'utf8');
 let scripts=0;for(const match of source.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)){if(match[1].trim()){new Script(match[1]);scripts++;}}
-for(const name of ['billing-core','data-repository','workspace-state'])new Script(await readFile(resolve(web,'assets/'+name+'.js'),'utf8'));
+for(const name of ['billing-core','workspace-state'])new Script(await readFile(resolve(web,'assets/'+name+'.js'),'utf8'));
 const server=createServer(async(req,res)=>{try{const file=resolve(web,'.'+new URL(req.url,'http://localhost').pathname);assert.ok(file.startsWith(resolve(web)+sep));res.setHeader('Content-Type',({'.html':'text/html;charset=utf-8','.svg':'image/svg+xml','.png':'image/png','.ico':'image/x-icon','.js':'application/javascript'}[extname(file)]||'application/octet-stream'));res.end(await readFile(file));}catch{res.writeHead(404);res.end();}});
 await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const origin='http://127.0.0.1:'+server.address().port;

@@ -238,8 +238,8 @@ try {
   await test('顶部设置迁移去掉旧行列字段并尊重关闭，Excel无冻结pane', async () => {
     await page.evaluate(()=>localStorage.setItem(SET_KEY,JSON.stringify({freezeRows:0,freezeCols:0,uiFreezeRows:0,uiFreezeCols:0})));await page.reload();const first=await page.evaluate(()=>({on:settings.freezeTopPanel,old:['freezeRows','freezeCols','uiFreezeRows','uiFreezeCols'].some(k=>k in settings)}));assert.deepEqual(first,{on:true,old:false});
     await page.evaluate(()=>{settings.freezeLevel='none';saveSettings(settings);});await page.reload();assert.equal(await page.evaluate(()=>settings.freezeTopPanel),false);assert.equal(await page.evaluate(()=>document.body.classList.contains('freeze-top')),false);
-    // ZIP解析库仅供测试读取导出内容。
-    await page.addScriptTag({path:resolve(webRoot,'assets/jszip.min.js')});
+    // ZIP解析库仅供测试读取导出内容，不随应用分发。
+    await page.addScriptTag({path:fileURLToPath(new URL('./fixtures/jszip.min.js',import.meta.url))});
     const result=await page.evaluate(async()=>{settings.freezeLevel='full';applyTopPanelFreeze();const original=downloadBlob;let capture;try{downloadBlob=async b=>{capture=b;};await exportXlsx();if(!capture)throw Error('无ExcelBlob');const zip=await JSZip.loadAsync(await capture.arrayBuffer());const worksheets=Object.keys(zip.files).filter(k=>/^xl\/worksheets\/sheet\d+\.xml$/.test(k));const xml=await Promise.all(worksheets.map(k=>zip.file(k).async('string')));return {count:xml.length,pane:xml.some(s=>/<pane(?:\s|>)/.test(s))};}finally{downloadBlob=original;}});assert.ok(result.count>0);assert.equal(result.pane,false);
   });
   await test('筛选等级与控件同胶囊且720高窗口保留明细空间', async () => {

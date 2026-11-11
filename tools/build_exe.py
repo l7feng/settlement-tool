@@ -6,10 +6,10 @@
 WebView2 互操作 dll 带上，再用 desktop_app.py 当入口（pywebview 黑屏时自动切 Edge --app）。
 
 用法（在打包环境里跑）：
-    D:\\My-Temporary\\pt-build-env\\Scripts\\python.exe tools/build_exe.py
+    D:\\Ai-Files\\Tools\\BuildEnv\\Scripts\\python.exe tools/build_exe.py
 
 出口布局（扁平化）：
-    <EXE_ROOT>/05-制作结算台/settlement-tool-v<版本>/
+    <EXE_ROOT>/05-Settlement Tool（制作结算台）/settlement-tool-v<版本>/
         settlement-tool.exe   +  _internal/
 """
 import datetime
@@ -28,7 +28,7 @@ with open(os.path.join(ROOT, 'VERSION'), encoding='utf-8') as f:
 DATE = datetime.datetime.now().strftime('%Y%m%d')
 
 NAME = 'settlement-tool'
-DIST = os.path.join(EXE_ROOT, '05-制作结算台', 'settlement-tool-v%s' % VERSION)
+DIST = os.path.join(EXE_ROOT, '05-Settlement Tool（制作结算台）', 'settlement-tool-v%s' % VERSION)
 WORK = os.path.join(ROOT, 'build', 'work')
 SPEC = os.path.join(ROOT, 'build')
 # staging：PyInstaller 先建到这里，再把内容整体移入 DIST（扁平化，无嵌套子目录）
@@ -41,7 +41,6 @@ MUST_HAVE = [
     'settlement-workbench.html',
     'VERSION',
     os.path.join('assets', 'xlsx.full.min.js'),
-    os.path.join('assets', 'jszip.min.js'),
     os.path.join('webview', 'lib', 'Microsoft.Web.WebView2.WinForms.dll'),
     os.path.join('webview', 'lib', 'Microsoft.Web.WebView2.Core.dll'),
 ]
@@ -109,7 +108,7 @@ def main():
     # 旧产物改名保留（不删除）
     if os.path.isdir(DIST):
         run_id = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
-        archive = os.path.join(EXE_ROOT, '00-归档')
+        archive = os.path.join(EXE_ROOT, '00-Archive（归档）')
         os.makedirs(archive, exist_ok=True)
         prev = os.path.join(archive, os.path.basename(DIST) + '-重建前-' + run_id + '-' + datetime.datetime.now().strftime('%f'))
         os.rename(DIST, prev)

@@ -888,7 +888,6 @@ td.record-project .record-project-revision{display:block;font-size:12px;color:va
 <button class="btn" onclick="openRecordActions()">登记记录</button>
 <button class="btn secondary" onclick="openProjectActions()">项目与价格</button>
 <button class="btn secondary" id="billingCompareButton" onclick="openCurrentBillingComparison()">结算对比</button>
-<button class="btn secondary" id="moreActionsButton" onclick="openMoreActions()">更多</button>
 <button class="btn secondary" id="dataUndoBtn" hidden onclick="undoDataChange()">撤销变更</button>
 <input type="file" id="importFile" accept=".json" style="display:none" onchange="importJSON(event)">
 </div>
@@ -912,10 +911,6 @@ td.record-project .record-project-revision{display:block;font-size:12px;color:va
 
 <!-- 筛选 -->
 <div class="filter-bar" id="filterBar">
-<div class="filter-field" hidden><label for="sortMode">显示方式：</label><select id="sortMode" onchange="render()">
-    <option value="time" selected>按时间（日历）</option>
-    <option value="project">按项目</option>
-  </select></div>
   <div class="filter-field"><label for="monthFilter">结算期：</label><select id="monthFilter" onchange="render()">
     <option value="">全部结算期累计</option>
   </select></div>
@@ -982,7 +977,6 @@ td.record-project .record-project-revision{display:block;font-size:12px;color:va
 <div class="toast" id="toast"></div>
 <div id="calendarHover" class="calendar-hover" role="tooltip" hidden onmouseenter="keepCalendarDetails()" onmouseleave="closeCalendarDetails()"></div>
 
-<script src="assets/data-repository.js"></script>
 <script src="assets/record-identity.js"></script>
 <script src="assets/billing-core.js"></script>
 <script src="assets/version-timeline.js"></script>
@@ -995,7 +989,7 @@ td.record-project .record-project-revision{display:block;font-size:12px;color:va
 // ═══════════════════════════════════════════════════════
 // 数据层与多工作台支持
 // ═══════════════════════════════════════════════════════
-const APP_VERSION = '2.8.1';
+const APP_VERSION = '2.8.2';
 let activeProfileId = (function(){
   try { return localStorage.getItem('settlement_active_profile') || 'default'; } catch(_) { return 'default'; }
 })();
@@ -1037,9 +1031,9 @@ function workbenchName(id) {
   const item = workbenchList.find(x => x.id === id);
   return item ? item.name : '工作台';
 }
-function nextWorkbenchName() {
-  let n = workbenchList.length + 1;
-  const used = new Set(workbenchList.map(x => x.name));
+function nextWorkbenchName(list=workbenchList) {
+  let n = list.length + 1;
+  const used = new Set(list.map(x => x.name));
   while (used.has('工作台' + n)) n++;
   return '工作台' + n;
 }
@@ -1120,6 +1114,16 @@ function switchWorkspaceProfile(id) {
   if (id === activeProfileId) return;
   activeProfileId = id;
   try { localStorage.setItem('settlement_active_profile', id); } catch(_) {}
+  // 撤销栈绑定账本；跨账本撤销会把旧账本整本写进新账本。
+  dataUndoStack.length = 0;
+  updateDataUndoUI();
+  closeModal();
+  pendingBackup = null;
+  clearRecordSelection();
+  state.collapsed = {};
+  state.selectedDate = null;
+  state.calYear = null;
+  state.calMonth = null;
   loadData();
   render();
   syncWorkbenchSelect();
@@ -1430,7 +1434,7 @@ function updateMonthFilter() {
 
 function renderDetail() {
   const list = displayedRecords();
-  const sortMode = document.getElementById('sortMode').value;
+  const sortMode = settings.defaultSort || 'project';
   const box = document.getElementById('view-detail');
 
   // S2 空态：无任何数据 → 引导登记；有筛选无结果 → 提示放宽
@@ -1775,14 +1779,14 @@ function renderCalendar(list, box, showDetails=true) {
   if (!state.calYear || state.calendarScope!==scope) {
     state.calendarScope=scope;
     const dates = Object.keys(byDay).sort();
-    const latest = dates[dates.length-1] || new Date().toISOString().slice(0,10);
+    const latest = dates[dates.length-1] || localToday();
     const d = new Date(latest + 'T00:00:00');
     state.calYear = d.getFullYear();
     state.calMonth = d.getMonth();
     state.selectedDate = null;
   }
   const y = state.calYear, m = state.calMonth;
-  const today = new Date().toISOString().slice(0,10);
+  const today = localToday();
 
   let html = '<div class="cal-nav">';
   html += `<button onclick="calNav(-1)">‹ 上月</button>`;
@@ -2337,7 +2341,7 @@ function projectOptions(sel) {
 
 // ── 登记单集 ──
 function openAddEp() {
-  const today = new Date().toISOString().slice(0,10);
+  const today = localToday();
   openModal(`
     <h2>登记新集</h2>
     <div class="form-row"><label>项目</label><select id="f_proj">${projectOptions(0)}</select></div>
@@ -2370,7 +2374,7 @@ function saveEp() {
 
 // ── 批量登记 ──
 function openBatch() {
-  const today = new Date().toISOString().slice(0,10);
+  const today = localToday();
   openModal(`
     <h2>批量登记集数</h2>
     <div class="form-row"><label>项目</label><select id="b_proj">${projectOptions(0)}</select></div>
@@ -2432,8 +2436,6 @@ function openPrices() {
 function savePrices() {
  const next=normalizeData(state.data);for(const [prefix,prices,grades] of [['',next.prices,['D']],['premium',next.premiumPrices,['A','B','C']]])for(const g of grades){const rate={};for(const [key,suffix] of [['per_min','min'],['per_ep','ep']]){const raw=document.getElementById('p_'+prefix+g+'_'+suffix).value.trim(),value=Number(raw);if(!raw||!Number.isFinite(value)||value<0||value>100000000){document.getElementById('priceError').textContent='单价需为0至100000000之间的有效数字';return;}rate[key]=value;}prices[g]=rate;}if(commitDataChange(next,'改单价')){closeModal();toast('已更新单价，可撤销');}
 }
-function openProductionSettings(){openProjectActions();}
-
 function categoryOf(p){return p.billingCategory||(p.grade==='D'?'automation':'legacy');}
 function uiCategory(p){return p.billingCategory==='automation'||(!p.billingCategory||p.billingCategory==='legacy')&&p.grade==='D'?'automation':'premium';}
 function categoryLabel(p){return {premium:'精品剧（ABC阶梯制）',automation:'自动化（D）',legacy:'历史项目（计价保留）'}[categoryOf(p)];}
@@ -2634,14 +2636,14 @@ function normalizeData(data) {
   return SettlementIdentity.ensure(d);
 }
 const dataUndoStack = [];
-function commitDataChange(next,label,preferences=null) {
+function commitDataChange(next,label,preferences=null,ledgers=null) {
   if(workspaceBootError)return toast('工作区存储未就绪，暂停保存；请下载备份并检查存储空间'),false;
   if(state.dataBlocked && !label.includes('恢复'))return toast('现有数据异常，请先恢复有效备份'),false;
   const checked=validateBackup(next);if(!checked.ok){toast('保存未执行：'+checked.error);return false;}next=checked.data;
   const old = JSON.parse(JSON.stringify(state.data));let oldRaw,before;
   try {
     oldRaw=dataRepository.readCurrent();
-    if(preferences)before=SettlementWorkspace.writeBundle(workspaceStorage,{businessRaw:JSON.stringify(next),preferences}).before;
+    if(preferences||ledgers)before=SettlementWorkspace.writeBundle(workspaceStorage,{businessRaw:JSON.stringify(next),businessKey:ledgerStorageKey(activeProfileId),preferences,ledgers}).before;
     else dataRepository.writeCurrent(JSON.stringify(next));
   } catch(error) {
     if(error.rollbackFailed){workspaceBootError=error;toast('保存中断，暂停写入；原文恢复日志已保留，请检查存储后重启');}
@@ -3014,6 +3016,36 @@ function validateBackup(input) {
     if(enveloped && input.preferences!==undefined)SettlementWorkspace.validatePreferences(input.preferences);
     if (enveloped && input.formatVersion !== 2) fail('暂不支持此备份版本，请使用版本 2 或旧版原始数据');
     const data = enveloped ? input.data : input;
+    let ledgerMap=null,workbenchMap=null;
+    if(enveloped && input.ledgers!==undefined){
+      if(!object(input.ledgers)) fail('账本集合无效');
+      const ids=Object.keys(input.ledgers);
+      if(ids.length>50) fail('账本数量超过支持范围');
+      let ledgerBytes=0;
+      ledgerMap={};
+      for(const id of ids){
+        if(!/^[A-Za-z0-9_-]{1,64}$/.test(id)) fail('账本编号无效');
+        const raw=input.ledgers[id];
+        if(typeof raw!=='string'||raw.length>BACKUP_MAX_BYTES) fail('账本「'+id+'」内容无效');
+        ledgerBytes+=raw.length;
+        if(ledgerBytes>BACKUP_MAX_BYTES*4) fail('备份账本总量过大');
+        let parsed;
+        try{parsed=JSON.parse(raw);}catch(_){fail('账本「'+id+'」不是有效 JSON');}
+        const checked=validateBackup(parsed);
+        if(!checked.ok) fail('账本「'+id+'」：'+checked.error);
+        ledgerMap[id]=JSON.stringify(checked.data);
+      }
+      if(input.activeLedger!==undefined&&(typeof input.activeLedger!=='string'||!ledgerMap[input.activeLedger]))fail('当前账本标记无效');
+      if(input.workbenches!==undefined){
+        if(!Array.isArray(input.workbenches)||input.workbenches.length>50)fail('工作台清单无效');
+        const seenIds=new Set();workbenchMap=[];
+        for(const item of input.workbenches){
+          if(!object(item)||typeof item.id!=='string'||!/^[A-Za-z0-9_-]{1,64}$/.test(item.id)||seenIds.has(item.id))fail('工作台编号无效');
+          if(typeof item.name!=='string'||!item.name.trim()||item.name.length>40)fail('工作台名称无效');
+          seenIds.add(item.id);workbenchMap.push({id:item.id,name:item.name.trim()});
+        }
+      }
+    }
     if (!object(data) || !object(data.prices) || !Array.isArray(data.projects)) fail('缺少有效的单价或项目列表');
     if(data.schemaVersion!==undefined && ![1,2,3].includes(data.schemaVersion))fail('暂不支持此数据版本');
     if(data.importHistory!==undefined)SettlementImportHistory.validate(data.importHistory);
@@ -3072,13 +3104,21 @@ function validateBackup(input) {
         if (e.finalCut !== undefined && !object(e.finalCut)) fail(p.name + '：成片元数据无效');
       }
     }
-    return {ok:true, data:normalizeData(JSON.parse(JSON.stringify(data))), meta:{preferences:enveloped&&input.preferences!==undefined?SettlementWorkspace.validatePreferences(input.preferences):null,formatVersion:enveloped ? 2 : 1, exportedAt:enveloped && typeof input.exportedAt === 'string' ? input.exportedAt : '', recordCount}};
+    return {ok:true, data:normalizeData(JSON.parse(JSON.stringify(data))), meta:{preferences:enveloped&&input.preferences!==undefined?SettlementWorkspace.validatePreferences(input.preferences):null,formatVersion:enveloped ? 2 : 1, exportedAt:enveloped && typeof input.exportedAt === 'string' ? input.exportedAt : '', recordCount, ledgers:ledgerMap, workbenches:workbenchMap, activeLedger:enveloped&&typeof input.activeLedger==='string'?input.activeLedger:null}};
   } catch (error) { return {ok:false, error:error.message, data:null}; }
 }
 
+function ledgerStorageKey(id){ return id==='default' ? 'settlement_v1' : 'settlement_v1_profile_'+id; }
+function allLedgerRaw(){
+  const out={};
+  for(const item of workbenchList){
+    try{const raw=workspaceStorage.getItem(ledgerStorageKey(item.id));if(typeof raw==='string')out[item.id]=raw;}catch(_){}
+  }
+  return out;
+}
 function backupEnvelope(data) {
   window.flushGlassPreferences?.();
-  return {formatVersion:2,app:'settlement-workbench',appVersion:APP_VERSION,exportedAt:new Date().toISOString(),data:normalizeData(data),preferences:SettlementWorkspace.capturePreferences(workspaceStorage)};
+  return {formatVersion:2,app:'settlement-workbench',appVersion:APP_VERSION,exportedAt:new Date().toISOString(),data:normalizeData(data),preferences:SettlementWorkspace.capturePreferences(workspaceStorage),ledgers:allLedgerRaw(),workbenches:workbenchList.map(x=>({id:x.id,name:x.name})),activeLedger:activeProfileId};
 }
 function backupStats(data) {
   let records=0,amount=0;for(const project of data.projects)for(const record of Object.values(project.episodes)){records++;amount+=SettlementBilling.fee(data.prices,project,record,data.premiumPrices);}
@@ -3121,13 +3161,10 @@ function importJSON(event) {
   event.target.value = '';
   return previewJSONFile(file);
 }
-function buildBackupRestore(mode='merge', overwrite=false) {
-  if (!pendingBackup) throw new Error('请重新选择备份文件');
-  if(state.dataBlocked && mode!=='replace')throw new Error('现有数据异常，请选择替换恢复；原始数据会先保留快照');
-  if (mode === 'replace') return {data:normalizeData(pendingBackup.data), conflicts:0, incoming:backupStats(pendingBackup.data).records};
-  const next = normalizeData(state.data);
+function mergeProjectData(localData,incomingData,overwrite) {
+  const next = normalizeData(localData);
   let conflicts=0, incoming=0;
-  for (const src of pendingBackup.data.projects) {
+  for (const src of incomingData.projects) {
     const sourceNames=new Set([src.name,...(src.aliases || [])]);
     const targets=next.projects.filter(p => p.id===src.id||[p.name,...(p.aliases || [])].some(name=>sourceNames.has(name)));
     if (targets.length>1) throw new Error('项目别名同时匹配多个现有项目：'+src.name+'；请先调整名称');
@@ -3143,9 +3180,47 @@ function buildBackupRestore(mode='merge', overwrite=false) {
   if (!checked.ok) throw new Error('合并失败：' + checked.error);
   return {data:checked.data, conflicts, incoming};
 }
+function localLedgerData(id){
+  if(id===activeProfileId) return state.data;
+  const raw=workspaceStorage.getItem(ledgerStorageKey(id));
+  if(!raw) return null;
+  const checked=validateBackup(JSON.parse(raw));
+  if(!checked.ok) throw new Error('本地账本「'+workbenchName(id)+'」异常：'+checked.error);
+  return checked.data;
+}
+function blankLedgerData(){return normalizeData({...DEFAULT_DATA, projects:[]});}
+function restoredWorkbenches(names,ids){
+  if(!names.length&&!ids.length)return null;
+  const list=workbenchList.map(x=>({...x}));
+  for(const item of names)if(!list.some(x=>x.id===item.id))list.push({...item});
+  for(const id of ids)if(!list.some(x=>x.id===id))list.push({id,name:nextWorkbenchName(list)});
+  if(!list.some(x=>x.id===activeProfileId))list.push({id:activeProfileId,name:nextWorkbenchName(list)});
+  return list;
+}
+function buildBackupRestore(mode='merge', overwrite=false) {
+  if (!pendingBackup) throw new Error('请重新选择备份文件');
+  if(state.dataBlocked && mode!=='replace')throw new Error('现有数据异常，请选择替换恢复；原始数据会先保留快照');
+  const sourceLedgers=pendingBackup.meta.ledgers||{};
+  const sourceNames=pendingBackup.meta.workbenches||[];
+  const ledgers={};
+  const workbenches=restoredWorkbenches(sourceNames,Object.keys(sourceLedgers));
+  if (mode === 'replace') {
+    for(const [id,raw] of Object.entries(sourceLedgers)) ledgers[id]=JSON.parse(raw);
+    return {data:normalizeData(pendingBackup.data), conflicts:0, incoming:backupStats(pendingBackup.data).records, ledgers, workbenches};
+  }
+  const merged=mergeProjectData(state.data,pendingBackup.data,overwrite);
+  for(const [id,raw] of Object.entries(sourceLedgers)){
+    if(id===activeProfileId) continue;
+    const incoming=JSON.parse(raw);
+    const local=localLedgerData(id)||blankLedgerData();
+    ledgers[id]=mergeProjectData(local,incoming,overwrite).data;
+  }
+  return {data:merged.data, conflicts:merged.conflicts, incoming:merged.incoming, ledgers, workbenches};
+}
 function renderBackupPreview() {
   const source = backupStats(pendingBackup.data);
-  openModal(`<h2>备份恢复预览</h2><p>${esc(pendingBackup.name)}</p><p style="margin:10px 0">备份时间：${esc(pendingBackup.meta.exportedAt || '旧版备份未记录时间')}<br>${source.projects} 个项目 / ${source.records} 条记录 / ¥${source.amount.toFixed(2)}</p><div class="form-row"><label>恢复方式</label><select id="restoreMode" onchange="updateBackupPreview()"><option value="merge">合并导入（保留当前单价与项目配置）</option><option value="replace">替换全部数据（含单价）</option></select></div><div class="form-row" id="restoreConflictRow"><label>同项目同记录</label><select id="restoreConflict" onchange="updateBackupPreview()"><option value="skip">跳过已有记录</option><option value="overwrite">覆盖已有记录</option></select></div><p id="restoreSummary"></p>${pendingBackup.meta.preferences?'<label class="liquid-setting"><input type="checkbox" id="restorePreferences">同时恢复外观与布局（主题、玻璃、列和视图设置）</label><p class="review-hint">默认保留这台设备的布局；勾选后将替换备份内的偏好，未包含的偏好使用默认值，可连同数据一起撤销。</p>':'<p class="review-hint">此备份不含外观与布局，将保留本机设置。</p>'}<p style="margin-top:10px;color:var(--muted)">确认后先保存当前数据快照，可下载或撤销本次操作。</p><div class="modal-actions"><button class="btn secondary" onclick="closeModal()">取消</button><button class="btn" id="restoreApply" onclick="applyBackupRestore()">确认恢复</button></div>`);
+  const ledgerCount = pendingBackup.meta.ledgers ? Object.keys(pendingBackup.meta.ledgers).length : 1;
+  openModal(`<h2>备份恢复预览</h2><p>${esc(pendingBackup.name)}</p><p style="margin:10px 0">备份时间：${esc(pendingBackup.meta.exportedAt || '旧版备份未记录时间')}<br>${source.projects} 个项目 / ${source.records} 条记录 / ¥${source.amount.toFixed(2)}${ledgerCount>1?' · '+ledgerCount+' 个账本':''}</p><div class="form-row"><label>恢复方式</label><select id="restoreMode" onchange="updateBackupPreview()"><option value="merge">合并导入（保留当前单价与项目配置）</option><option value="replace">替换全部数据（含单价）</option></select></div><div class="form-row" id="restoreConflictRow"><label>同项目同记录</label><select id="restoreConflict" onchange="updateBackupPreview()"><option value="skip">跳过已有记录</option><option value="overwrite">覆盖已有记录</option></select></div><p id="restoreSummary"></p>${pendingBackup.meta.preferences?'<label class="liquid-setting"><input type="checkbox" id="restorePreferences">同时恢复外观与布局（主题、玻璃、列和视图设置）</label><p class="review-hint">默认保留这台设备的布局；勾选后将替换备份内的偏好，未包含的偏好使用默认值，可连同数据一起撤销。</p>':'<p class="review-hint">此备份不含外观与布局，将保留本机设置。</p>'}<p style="margin-top:10px;color:var(--muted)">确认后先保存当前数据快照，可下载或撤销本次操作。备份内的其他账本与工作台名称一并恢复；本机多出的账本保留不动。</p><div class="modal-actions"><button class="btn secondary" onclick="closeModal()">取消</button><button class="btn" id="restoreApply" onclick="applyBackupRestore()">确认恢复</button></div>`);
   if(state.dataBlocked)document.getElementById('restoreMode').value='replace';
   updateBackupPreview();
 }
@@ -3155,7 +3230,8 @@ function updateBackupPreview() {
   document.getElementById('restoreConflictRow').style.display = mode === 'merge' ? '' : 'none';
   try {
     const result=buildBackupRestore(mode,overwrite), stats=backupStats(result.data);
-    document.getElementById('restoreSummary').textContent = `恢复后：${stats.projects} 个项目，${stats.records} 条记录，¥${stats.amount.toFixed(2)}。${mode==='merge' ? '写入 '+result.incoming+' 条；冲突 '+result.conflicts+' 条，'+(overwrite?'覆盖':'跳过')+'。' : '将替换当前全部数据。'}`;
+    const ledgerTotal=Object.keys(result.ledgers||{}).length;
+    document.getElementById('restoreSummary').textContent = `恢复后：${stats.projects} 个项目，${stats.records} 条记录，¥${stats.amount.toFixed(2)}${ledgerTotal>1?`，共 ${ledgerTotal} 个账本`:''}。${mode==='merge' ? '写入 '+result.incoming+' 条；冲突 '+result.conflicts+' 条，'+(overwrite?'覆盖':'跳过')+'。' : '将替换当前全部数据。'}`;
     document.getElementById('restoreApply').disabled=false;
   } catch(error) { document.getElementById('restoreSummary').textContent=error.message; document.getElementById('restoreApply').disabled=true; }
 }
@@ -3167,9 +3243,22 @@ function applyBackupRestore() {
     if (!confirm(`确认${mode==='replace'?'替换全部数据':'合并导入'}？恢复后 ${stats.records} 条记录，¥${stats.amount.toFixed(2)}${mode==='merge'&&overwrite?'，冲突记录将被覆盖':''}。`)) return;
     saveRecoveryBackup();
     const preferences=document.getElementById('restorePreferences')?.checked?pendingBackup.meta.preferences:null;
-    if (commitDataChange(result.data,'恢复 JSON 备份',preferences) === false) return;
+    const ledgers={};
+    for(const [id,data] of Object.entries(result.ledgers||{})){
+      if(id===activeProfileId) continue;
+      ledgers[ledgerStorageKey(id)]=JSON.stringify(data);
+    }
+    if (commitDataChange(result.data,'恢复 JSON 备份',preferences,Object.keys(ledgers).length?ledgers:null) === false) return;
+    applyRestoredWorkbenches(result.workbenches);
     pendingBackup=null; closeModal(); toast('恢复完成；恢复前数据可通过“下载恢复前快照”保存');
   } catch(error) { toast('恢复未执行：' + error.message); }
+}
+function applyRestoredWorkbenches(list){
+  if(!Array.isArray(list)||!list.length)return;
+  workbenchList=list;
+  if(!workbenchList.some(x=>x.id===activeProfileId))workbenchList.push({id:activeProfileId,name:nextWorkbenchName()});
+  writeWorkbenchList(workbenchList);
+  syncWorkbenchSelect();
 }
 
 // 完整工作区恢复后刷新应用状态，不重载页面或覆盖未确认业务。
@@ -3189,7 +3278,7 @@ function workspaceSettingsFields(){
   let status='';
   try{const snapshots=SettlementWorkspace.listUpgradeSnapshots(workspaceStorage);status=snapshots.length?'已保留 '+snapshots.length+' 份更新前快照':'暂无更新前快照；已有工作区在首次升级时自动保存';}
   catch(error){status='快照无法读取：'+error.message;}
-  return `<div class="workspace-panel"><p class="review-hint">当前版本 ${APP_VERSION} · 本地使用。${window.desktopWorkspace?.enabled?'项目、账目和设置自动保存到 '+esc(window.desktopWorkspace.path)+'，无需手动导出。':'单独网页版自动保存到当前浏览器。'}完整JSON备份包含工作数据、列顺序、主题、玻璃与布局；恢复时可选择是否应用布局。</p><p id="workspaceSnapshotStatus">${esc(status)}${workspaceBootError?' · 保存已暂停':''}</p><div class="workspace-buttons"><button type="button" class="btn secondary" onclick="exportJSON()">备份数据与布局</button><button type="button" id="downloadUpgradeSnapshot" class="btn secondary" onclick="downloadLatestUpgradeSnapshot()">下载最近更新前快照</button></div><p class="review-hint">账号云同步尚未连接。下方验证只使用两个独立模拟设备和合成记录，不上传、不修改你的账目。</p><button type="button" id="runSyncRehearsal" class="btn secondary" onclick="runSynchronizationRehearsal()">验证双设备同步</button><p id="syncRehearsalResult" role="status" aria-live="polite">尚未运行</p></div>`;
+  return `<div class="workspace-panel"><p class="review-hint">当前版本 ${APP_VERSION} · 本地使用。${window.desktopWorkspace?.enabled?'项目、账目和设置自动保存到 '+esc(window.desktopWorkspace.path)+'，无需手动导出。':'单独网页版自动保存到当前浏览器。'}完整JSON备份包含全部账本、列顺序、主题、玻璃与布局；恢复时可选择是否应用布局。</p><p id="workspaceSnapshotStatus">${esc(status)}${workspaceBootError?' · 保存已暂停':''}</p><div class="workspace-buttons"><button type="button" class="btn secondary" onclick="exportJSON()">备份数据与布局</button><button type="button" id="downloadUpgradeSnapshot" class="btn secondary" onclick="downloadLatestUpgradeSnapshot()">下载最近更新前快照</button></div><p class="review-hint">账号云同步尚未连接。下方验证只使用两个独立模拟设备和合成记录，不上传、不修改你的账目。</p><button type="button" id="runSyncRehearsal" class="btn secondary" onclick="runSynchronizationRehearsal()">验证双设备同步</button><p id="syncRehearsalResult" role="status" aria-live="polite">尚未运行</p></div>`;
 }
 function downloadLatestUpgradeSnapshot(){
   try{
@@ -3351,7 +3440,6 @@ function topLayoutFields(prefix,current=settings){
   return `<div class="form-row"><label>冻结范围</label><select id="${prefix}FreezeLevel">${FREEZE_LEVELS.map(([value,label])=>`<option value="${value}" ${current.freezeLevel===value?'selected':''}>${label}</option>`).join('')}</select></div><div class="form-row"><label>背景不透明度</label><input type="range" id="${prefix}TopOpacity" min="0.55" max="1" step="0.01" value="${shownOpacity}" oninput="this.nextElementSibling.textContent=Math.round(this.value*100)+'%'"><output>${Math.round((shownOpacity)*100)}%</output></div><p class="review-hint">控制顶栏、侧栏、统计卡片、分组和信息面板的背景；文字保持清晰。</p><p class="review-hint">选择固定范围；其他区域随明细滚动。</p><div class="layout-options">${TOP_SECTIONS.filter(x=>x.key!=='header').map(x=>`<label><input id="${prefix}Hide_${x.key}" type="checkbox" ${current.topCollapsed?.includes(x.key)?'checked':''}> 收起${x.name}</label>`).join('')}</div>`;
 }
 function readTopLayoutFields(prefix){return {freezeLevel:document.getElementById(prefix+'FreezeLevel').value,topOpacity:Number(document.getElementById(prefix+'TopOpacity').value),topCollapsed:TOP_SECTIONS.filter(x=>x.key!=='header'&&document.getElementById(prefix+'Hide_'+x.key).checked).map(x=>x.key)};}
-function openTopLayout(){openModal(`<h2>顶部布局</h2>${topLayoutFields('tl')}<div class="modal-actions"><button class="btn secondary" onclick="resetTopLayoutFields('tl')">全部展开</button><button class="btn secondary" onclick="closeModal()">取消</button><button class="btn" onclick="saveTopLayout()">应用</button></div>`);}
 function resetTopLayoutFields(prefix){TOP_SECTIONS.filter(x=>x.key!=='header').forEach(x=>document.getElementById(prefix+'Hide_'+x.key).checked=false);}
 function saveTopLayout(){Object.assign(settings,readTopLayoutFields('tl'));settings.freezeTopPanel=settings.freezeLevel!=='none';saveSettings(settings);window.setOverviewOpacity?.(settings.topOpacity);closeModal();applyTopPanelFreeze();}
 function toggleTopCompact(){settings.topCollapsed=settings.topCollapsed?.length?[]:['cards','summary','import'];saveSettings(settings);applyTopPanelFreeze();}
@@ -3372,7 +3460,6 @@ function applyTopPanelFreeze(){
   });
   document.body.classList.toggle('freeze-top',settings.freezeTopPanel);
   applySidePanels();updateTopTransparency();
-  const n=settings.topCollapsed.length;if(document.getElementById('topCompactBtn'))document.getElementById('topCompactBtn').textContent=n?`展开区域（${n}）`:'收起概览';
   restoreWorkspacePosition(anchor);
 }
 
@@ -3742,7 +3829,6 @@ document.getElementById('modalBox').addEventListener('pointerdown',event=>{
 });
 applySideWidths();
 
-document.getElementById('sortMode').value = settings.defaultSort || 'project';
 render();
 </script>
 <script src="assets/record-maintenance.js"></script>
