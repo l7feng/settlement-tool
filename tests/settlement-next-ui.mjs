@@ -128,6 +128,25 @@ await page.click('[data-act="import"]');
 await page.waitForTimeout(200);
 check('导入弹窗可打开', await page.evaluate(() => !!document.querySelector('#importList')));
 
+await page.keyboard.press('Escape');
+await page.waitForTimeout(150);
+await page.setViewportSize({width: 949, height: 510});
+await page.waitForTimeout(300);
+check('窄窗日历自动收起', await page.evaluate(() => document.getElementById('calDays').classList.contains('collapsed')));
+check('窄窗表格仍可见', await page.evaluate(() => document.querySelectorAll('#tableBody .row[data-key]').length >= 1 && document.getElementById('tableScroll').clientHeight > 0));
+await page.click('#calToggle');
+await page.waitForTimeout(300);
+check('展开日历后可换行且不横向溢出', await page.evaluate(() => {
+  const days = document.getElementById('calDays');
+  const rows = new Set([...days.children].map(c => Math.round(c.getBoundingClientRect().top))).size;
+  return !days.classList.contains('collapsed') && rows > 1 && days.scrollWidth <= days.clientWidth + 1;
+}));
+check('窄窗表格可横向滚动而非裁切', await page.evaluate(() => {
+  const box = document.getElementById('tableScroll');
+  return box.scrollWidth > box.clientWidth;
+}));
+await page.setViewportSize({width: 1780, height: 1060});
+
 console.log(`RESULT ${failures.length ? 'FAIL' : 'PASS'} ${pass}/${total}`);
 if (failures.length) for (const f of failures) console.log('  × ' + f);
 await browser.close();
