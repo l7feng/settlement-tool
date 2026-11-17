@@ -7,6 +7,7 @@
 <title>制作结算台</title>
 <!-- 依赖本地化：assets/ 与 html 同目录即可离线工作（exe 打包时随行） -->
 <script src="assets/desktop-workspace.js"></script>
+<script src="assets/version.js"></script>
 <script src="assets/xlsx.full.min.js"></script>
 <script>
 /* 兜底：本地 assets 缺失时（例如 html 被单独拷走）才回退 CDN */
@@ -996,7 +997,7 @@ td.record-project .record-project-revision{display:block;font-size:12px;color:va
 // ═══════════════════════════════════════════════════════
 // 数据层与多工作台支持
 // ═══════════════════════════════════════════════════════
-const APP_VERSION = '2.8.3';
+const APP_VERSION = window.SETTLEMENT_VERSION || '0.0.0';   // 单一来源：assets/version.js（由 VERSION 生成）
 document.getElementById('statusVersion').textContent = '制作结算台 | v' + APP_VERSION;
 let activeProfileId = (function(){
   try { return workspaceStorage.getItem('settlement_active_profile') || 'default'; } catch(_) { return 'default'; }

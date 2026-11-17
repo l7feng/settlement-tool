@@ -4,6 +4,11 @@
 
 | 日期 | 提交 | 说明 |
 | --- | --- | --- |
+| 2026-11-17 | s3(3.1) | **测试两档化**：新增 `tests/suites.json`（套件清单唯一来源）与 `tools/run-unit.mjs` / `tools/run-ui.mjs`，`package.json` 提供 `npm run test:unit`（无浏览器依赖，**15 套 2.2 s**）、`test:ui`（自动设 `SETTLEMENT_WEB_ROOT`=仓库、`SETTLEMENT_TIMEOUT=300000`）、`test`；`tools/run_tests.py` 改为读同一份 `suites.json`，两处清单不再漂移。`package.json` 声明 `playwright` 为 devDependency（本机未 `npm install` 时 `playwright-runtime` 仍自动回退到系统 Edge） |
+| 2026-11-17 | s3(3.3) | **构建单一真源**：`tools/build_exe.py` 的 `WEB_ROOT` 默认改为**仓库自身**（不再读 `Tools\Html\settlement-tool`）；新增 `check_sources()`——仓库页面与工作副本页面对不上就中止并打印两边路径 + 谁较新，缺 `VERSION` 也中止；解释器路径可用 `SETTLEMENT_PY` 覆盖；打包前提示 icons 目录里的 `.bak` 备份件不进包。`tests/test_build_source.py` 6/6（含「分叉必拦」「页面无写死版本」）。**注意：本机工作副本仍是旧页面，所以现在直接打包会按设计中止**——同步那一步归 S3-3.3 收尾/D6 解冻 |
+| 2026-11-17 | s3(3.4) | **版本号单一来源**：新增 `tools/sync_version.py`（`VERSION` → `assets/version.js`，`--check` 不一致返回 1）；页面 `const APP_VERSION = '2.8.3'` 改为 `window.SETTLEMENT_VERSION`，并加 `<script src="assets/version.js">`；`build_exe` 打包前强制 `--check`。界面版本、VERSION 文件、包名三处永远一致 |
+| 2026-11-17 | s3(3.5) | **仓库卫生**：`settlement-workbench.html.bak-20261114-ver`、`VERSION.bak-20261114-ver`、`assets/icons/app.ico.bak-20261113-r3`、`build/settlement-tool.spec` 移出仓库（存 `D:\My-Temporary\_scratch\s3_repo_hygiene\`，可回溯）；CHANGELOG 两条 GBK 乱码行（`e21418b` 10-05、`4b2b984` 09-30）按 `git log` 原文重写，顺带修回 `633c0cc` / `2559852` |
+
 | 2026-11-17 | s2(2.1) | **版本号解析收敛**：新增 `assets/revision-parse.js`（`SettlementRevision`：拉丁 `V01/V-1/v1_final`、中文 `第N版/版本N`、中文数字一～一百零五、无版号返回 0 不回落到 1），替换 `formalSourceVersion` / `versionNumber` / `demoSourceMeta` / `recordVersionLabel` 四处旧实现。`tests/revision-parse.mjs` 16 组、`revision-consistency.mjs` 9 组（四入口同结果 + 静态断言旧正则已删） |
 | 2026-11-17 | s2(2.2) | **excluded 单一语义 + 来源标注**：新增 `assets/exclusion-rules.js`（`SettlementExclusion`：`MANUAL/AUTO/setManual` 打 `excludeManual` 防自动回弹、`setAuto` 可被人工覆盖、`normalize` 按原因把旧数据判为 auto/manual）。胜者 `clearAuto`、败者 `setAuto`；成片替换/恢复、改工作类型、批量纠正、记录纠正全部走同一入口；`exclusionText()` 显示「人工置零 / 自动置零 + 原因」 |
 | 2026-11-17 | s2(2.3) | **reconcile 去重成唯一幂等实现**：`reconcileFormalVersions` 改为全量、幂等、与改动来源无关（按 集｜工作类型 分组，版本号→日期→键 排序）；删掉 HTML `normalizeData` 里并行的 `supersededKeys` 实现；`commitDataChange` 不再按「导入/删除」标签路由，任何一次落账都跑 normalizeData（删除时另做 Demo 分组补偿）。同版同日并列不再 throw，改标 `needsReview + versionConflict` |
@@ -36,7 +41,7 @@
 | 2026-11-14 | logic3 | 不计价原因收敛为单一谓词：`billing-core` 新增 `exclusionReason` / `EXCLUSION_REASONS`，`isBillable` 复用同一判断；明细“计价”列 tooltip 显示具体原因（修改 / 手动排除 / 标记不计价 / Demo旧版 / 旧版本 / 成片替换） |
 | 2026-11-14 | test | 回归基线：`node tests/settlement-regression.mjs` = **58/93**；35 项失败均为用例与当前界面漂移（按钮文案、`openTopLayout` 已移除、玻璃材质断言过时、缺 FinalMix 夹具），非本轮业务改动；`tests/test_workspace_file.py` 11/11、`tests/test_desktop_reuse.py` 6/6 |
 | --- | --- | --- |
-| 2026-10-05 | `e21418b` | chore: 璺�寰勬敼鍙ｅ�归綈 D:/Ai-Files 鏂扮粨鏋勶紙椤圭洰39澶嶇洏锛� |
-| 2026-09-30 | `4b2b984` | ui: 涓冧富棰樼幓鐠冨弬閲�+data-style鐜荤拑杞�(榛樿��glass淇濆畧妗�)+glass-tuner鍘绘ˉ鐗�+paper瀵归綈7F榛樿�や富棰�; 澶嶇洏淇�澶�: bootTheme涓嶅啀鍚炴樉寮忕┖涓婚��(鏅ㄦ洣闈�), 8澶勫脊绐楀渾瑙抰oken鍖�, 鎵撳寘瑙ｉ噴鍣ㄨ矾寰勬洿鏂�; 绉婚櫎杩囨椂涓存椂鏂囨。 |
-| 2026-09-28 | `633c0cc` | 淇�澶嶅儚绱犳帰閽堟紡鍒わ細鍙�缁熻�″�㈡埛鍖� + 鏈�涓昏壊鍗犳瘮鍙屾潯浠� |
-| 2026-09-28 | `2559852` | v2.0.0 鐭�鍓ф贩闊崇粨绠楀伐浣滃彴锛氱綉椤电増鍏ㄥ姛鑳� + 妗岄潰鐗堝弻澹冲洖閫�锛坧ywebview 鍍忕礌鎺㈤拡鈫扙dge --app 鍏滃簳锛� |
+| 2026-10-05 | `e21418b` | chore: 路径改口对齐 D:/Ai-Files 新结构（项目39复盘） |
+| 2026-09-30 | `4b2b984` | ui: 七主题玻璃参量 + data-style 玻璃轴（默认 glass 保守档）+ glass-tuner 去桥版 + paper 对齐 7F 默认主题；复盘修复：bootTheme 不再吞显式空主题（晨曦青）、8 处弹窗圆角 token 化、打包解释器路径更新；移除过时临时文档 |
+| 2026-09-28 | `633c0cc` | 修复像素探针漏判：只统计客户区 + 最主色占比双条件 |
+| 2026-09-28 | `2559852` | v2.0.0 短视频混音结算工作台：网页版全功能 + 桌面版双壳回退（pywebview 像素探针 → Edge --app 兜底） |

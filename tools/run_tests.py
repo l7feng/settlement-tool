@@ -15,25 +15,11 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-UNIT_SUITES = [
-    ('workspace-state.mjs', '工作区偏好/事务/升级快照'),
-    ('workspace-ledgers.mjs', '多账本事务与升级快照'),
-    ('desktop-adapter.mjs', '桌面存储适配器（合并写入/快照加载）'),
-    ('billing-identity.mjs', '计价口径与按集取整'),
-    ('billing-grade-coverage.mjs', '等级阶梯覆盖率'),
-    ('billing-unrated.mjs', '待定级口径（S2-2.4）'),
-    ('revision-parse.mjs', '版本号解析单测（S2-2.1）'),
-    ('revision-consistency.mjs', '四入口版本号一致（S2-2.1）'),
-    ('version-same-version-conflict.mjs', '同版本不同日期拦截（S2-2.5 D1）'),
-    ('version-supersede.mjs', '旧版本置零与人工覆盖（S2-2.2/2.3）'),
-    ('episode-key-worktype.mjs', '登记判重按工作类型（S2-2.6）'),
-    ('rate-snapshot.mjs', '单价按记录冻结（S2-2.10）'),
-    ('period-range.mjs', '结算期起止与导出列（S2-2.7）'),
-    ('sync-core.mjs', '同步状态机'),
-    ('project-workflow-core.mjs', '项目工作流内核'),
-]
-UI_SUITES = ['settlement-regression.mjs', 'name-layout.mjs']
-
+import json
+# 套件清单只有 tests/suites.json 一份（S3-3.1）：npm 的 run-unit/run-ui 也读它，避免两处漂移。
+_SUITES = json.loads((ROOT / 'tests' / 'suites.json').read_text(encoding='utf-8'))
+UNIT_SUITES = [(item['file'], item['title']) for item in _SUITES['unit']]
+UI_SUITES = [item['file'] for item in _SUITES['ui']]
 
 def node_bin():
     """优先用环境变量，其次 PATH，最后常见安装位置。"""

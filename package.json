@@ -1,0 +1,14 @@
+{
+  "name": "settlement-tool",
+  "private": true,
+  "description": "制作结算台：影视混音交付结算工作台（页面 + 桌面壳 + 测试）",
+  "scripts": {
+    "test:unit": "node tools/run-unit.mjs",
+    "test:ui": "node tools/run-ui.mjs",
+    "test": "node tools/run-unit.mjs && node tools/run-ui.mjs",
+    "test:py": "python tools/run_tests.py"
+  },
+  "devDependencies": {
+    "playwright": "^1.62.1"
+  }
+}

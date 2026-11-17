@@ -1,0 +1,23 @@
+{
+  "unit": [
+    {"file": "workspace-state.mjs", "title": "工作区偏好/事务/升级快照"},
+    {"file": "workspace-ledgers.mjs", "title": "多账本事务与升级快照"},
+    {"file": "desktop-adapter.mjs", "title": "桌面存储适配器（合并写入/快照/409 重放/重启撤销）"},
+    {"file": "billing-identity.mjs", "title": "计价口径与按集取整"},
+    {"file": "billing-grade-coverage.mjs", "title": "等级阶梯覆盖率"},
+    {"file": "billing-unrated.mjs", "title": "待定级口径（S2-2.4）"},
+    {"file": "revision-parse.mjs", "title": "版本号解析单测（S2-2.1）"},
+    {"file": "revision-consistency.mjs", "title": "四入口版本号一致（S2-2.1）"},
+    {"file": "version-same-version-conflict.mjs", "title": "同版本不同日期拦截（S2-2.5 D1）"},
+    {"file": "version-supersede.mjs", "title": "旧版本置零与人工覆盖（S2-2.2/2.3）"},
+    {"file": "episode-key-worktype.mjs", "title": "登记判重按工作类型（S2-2.6）"},
+    {"file": "rate-snapshot.mjs", "title": "单价按记录冻结（S2-2.10）"},
+    {"file": "period-range.mjs", "title": "结算期起止与导出列（S2-2.7）"},
+    {"file": "sync-core.mjs", "title": "同步状态机"},
+    {"file": "project-workflow-core.mjs", "title": "项目工作流内核"}
+  ],
+  "ui": [
+    {"file": "settlement-regression.mjs", "title": "端到端回归"},
+    {"file": "name-layout.mjs", "title": "名称列布局"}
+  ]
+}
