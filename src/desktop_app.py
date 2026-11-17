@@ -28,7 +28,7 @@ import json
 import logging
 import logging.handlers
 import secrets
-from workspace_store import WorkspaceStore
+from workspace_store import WorkspaceStore, RevisionConflict
 import http.server
 import os
 import socketserver
@@ -43,6 +43,9 @@ import urllib.request
 import webview
 
 APP_NAME = '制作结算台'
+# 服务端能力清单：前端据此决定用增量还是整份提交（S2-2.8）。老 exe 不返回这个字段，
+# 前端就退回「整份提交」的旧路径，不需要按 exe 版本号猜。
+CAPABILITIES = ['patch', 'revision-conflict-retry']
 PORT_BASE = 26788
 PORT_RANGE = 20          # 26788 ~ 26807
 PING_PATH = '/__app_ping__'
@@ -163,7 +166,11 @@ class _Handler(http.server.SimpleHTTPRequestHandler):
                 self.server.workspace.preserve_legacy(value['storage'])
                 return self._json(200, {'ok': True})
             if 'storage' in value:
-                saved = self.server.workspace.save(value['revision'], value['storage'])
+                saved = self.server.workspace.save(value['revision'], value['storage'], value.get('label'))
+            elif value.get('action') == 'consume-last-change':
+                # S2-2.9：把「重启后一次撤销」用掉，同一份状态不会被撤销第二次
+                return self._json(200, {'ok': True, 'consumed': self.server.workspace.consume_last_change(),
+                    'capabilities': CAPABILITIES})
             elif value.get('action') == 'delete-ledger':
                 # 删除账本是一个独立动作：只接受「恰好一个业务键」的删除请求，
                 # 避免普通增量写入顺手把账本删空。
@@ -172,10 +179,16 @@ class _Handler(http.server.SimpleHTTPRequestHandler):
                     raise ValueError('删除账本请求无效')
                 saved = self.server.workspace.patch(value['revision'], changes, allow_business_delete=True)
             else:
-                saved = self.server.workspace.patch(value['revision'], value['patch'])
+                saved = self.server.workspace.patch(value['revision'], value['patch'], label=value.get('label'))
+            saved.setdefault('capabilities', CAPABILITIES)
             return self._json(200, saved)
+        except RevisionConflict as conflict:
+            # S2-2.8：版本冲突不再让用户手点重开——回执磁盘上的真实版本号，
+            # 前端据此重载后把这次改动重放一遍。
+            return self._json(409, {'error': str(conflict), 'conflict': 'revision',
+                'revision': conflict.revision, 'capabilities': CAPABILITIES})
         except Exception as error:
-            return self._json(409, {'error': str(error)})
+            return self._json(409, {'error': str(error), 'capabilities': CAPABILITIES})
 
     def do_GET(self):
         route = self.path.split('?')[0]
@@ -185,7 +198,22 @@ class _Handler(http.server.SimpleHTTPRequestHandler):
             try:
                 saved = self.server.workspace.read()
                 saved['path'] = str(self.server.workspace.path)
+                saved['capabilities'] = CAPABILITIES
+                last = self.server.workspace.last_change()
+                saved['lastChange'] = last if last and last['revision'] == saved['revision'] else None
                 return self._json(200, saved)
+            except Exception as error:
+                return self._json(409, {'error': str(error)})
+        if route == '/__workspace_previous__':
+            # S2-2.9：重启后那一次撤销要拿到「上一个版本」的整份数据，由前端走正常撤销路径落账。
+            if not self._authorized():
+                return self._json(403, {'error': '工作区请求未授权'})
+            try:
+                state = self.server.workspace.previous_state()
+                if state is None:
+                    return self._json(404, {'error': '没有可用的上一版本'})
+                state['capabilities'] = CAPABILITIES
+                return self._json(200, state)
             except Exception as error:
                 return self._json(409, {'error': str(error)})
         if route == '/__upgrade_blob__':

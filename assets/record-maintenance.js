@@ -11,7 +11,7 @@ function refreshAffectedDemos(next,items){
  for(const p of next.projects)for(const r of Object.values(p.episodes))if(ids.has(r.recordId)&&(r.type||p.type)==='Demo')names.add(demoWorkKey(demoWorkName(p,r)));
  for(const key of names){const versions=[];for(const p of next.projects)for(const r of Object.values(p.episodes))if((r.demoRevision||r.demoSuperseded||/demo|试听|样片/i.test(r.sourceFile||''))&&(r.type||p.type)==='Demo'&&demoWorkKey(demoWorkName(p,r))===key&&workTypeOf(r)!=='修改'&&((!r.excluded&&r.billable!==false)||r.demoSuperseded))versions.push({p,r,revision:recordDemoRevision(p,r),date:r.date});
   versions.sort(compareDemoRevision);if(versions.length>1&&compareDemoRevision(versions.at(-1),versions.at(-2))===0)throw Error('Demo最新版日期和版本冲突，请分别调整后重试');
-  for(const v of versions)if(v===versions.at(-1)){if(v.r.demoSuperseded){delete v.r.demoSuperseded;v.r.excluded=false;v.r.excludeReason='';}}else{v.r.demoSuperseded=true;v.r.excluded=true;v.r.excludeReason='Demo旧版本（仅最新版计费）';}
+  for(const v of versions)if(v===versions.at(-1)){if(v.r.demoSuperseded){delete v.r.demoSuperseded;SettlementExclusion.clearAuto(v.r);}}else{v.r.demoSuperseded=true;SettlementExclusion.setAuto(v.r,true,'Demo旧版本（仅最新版计费）');}
  }
 }
 function moveMaintenanceRecord(next,item,name){

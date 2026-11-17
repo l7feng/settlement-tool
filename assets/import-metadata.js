@@ -18,7 +18,9 @@
   const name=known?.name||rawName;
   const tag=parts.join('/'),explicitGrade=[...parts].reverse().map(x=>x.match(/(?:^|[^A-Za-z])([ABCD])(?=[ _.-]*(?:20\d{6}|\d{4}|$)|[_ .-])/i)?.[1]?.toUpperCase()).find(Boolean);
   const category=/自动化|自动剧/.test(tag)||explicitGrade==='D'?'automation':/精品剧|精品/.test(tag)||explicitGrade&&explicitGrade!=='D'?'premium':known?.billingCategory&&known.billingCategory!=='legacy'?known.billingCategory:known?.grade==='D'?'automation':'premium';
-  const grade=category==='automation'?'D':explicitGrade&&explicitGrade!=='D'?explicitGrade:demo?'A':known?.grade&&known.grade!=='D'?known.grade:'C';
+  // 等级：显式标记 > 自动化 D > Demo 默认 A > 已有项目等级；都没有时给 null（待定级），
+  // 不再默认 C——按 D2「改单价不要动历史」的语境，猜一个中间档会把钱算歪（S2-2.4）。
+  const grade=category==='automation'?'D':explicitGrade&&explicitGrade!=='D'?explicitGrade:demo?'A':known?.grade&&['A','B','C'].includes(known.grade)?known.grade:null;
   const named=!!name;
   const explicitCategory=/精品|自动化|自动剧/.test(tag)||!!explicitGrade;
   return {name:named?name:'',type:demo?'Demo':null,billingCategory:category,grade,segment,named,explicitGrade:!!explicitGrade,categorySource:explicitCategory?'名称标记':known?'已有项目':'默认建议，请核对',nameSource:known?'已有项目匹配':fileHasTitle?'文件名前缀':'项目文件夹'};

@@ -27,6 +27,14 @@ UPGRADE_KEEP = 3          # 升级前快照最多留 3 份（此前无上限，�
 UPGRADE_BLOB_NAME = re.compile(r'^[0-9A-Za-z._-]{1,80}\.json\.gz$')
 
 
+class RevisionConflict(ValueError):
+    """版本号不匹配：带上磁盘上的真实版本号，前端可以据此自动重放这次改动（S2-2.8）。"""
+
+    def __init__(self, current):
+        super().__init__('另一个窗口已更新工作区，请关闭其他窗口并重新打开')
+        self.revision = int(current) if isinstance(current, int) else 0
+
+
 class WorkspaceStore:
     SNAPSHOT_KEEP = 5
 
@@ -101,17 +109,17 @@ class WorkspaceStore:
                 stream.seek(0)
                 msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
 
-    def save(self, revision, values):
+    def save(self, revision, values, label=None):
         with self.lock, self._file_lock():
             self.validate(values)
             current = self.read()
             if type(revision) is not int or revision != current['revision']:
-                raise ValueError('另一个窗口已更新工作区，请关闭其他窗口并重新打开')
+                raise RevisionConflict(current['revision'])
             if current['storage'] == values and self.path.exists():
                 return current
-            return self._commit(current, values)
+            return self._commit(current, values, label=label)
 
-    def patch(self, revision, changes, allow_business_delete=False):
+    def patch(self, revision, changes, allow_business_delete=False, label=None):
         """只落变化的键：键→新值，None 表示删除。仍是同步写盘，返回时已落定。
 
         业务账本是「删了就没」的数据，默认拒绝删除；只有显式声明
@@ -122,7 +130,7 @@ class WorkspaceStore:
                 raise ValueError('增量写入格式无效')
             current = self.read()
             if type(revision) is not int or revision != current['revision']:
-                raise ValueError('另一个窗口已更新工作区，请关闭其他窗口并重新打开')
+                raise RevisionConflict(current['revision'])
             storage = dict(current['storage'])
             changed = False
             for key, value in changes.items():
@@ -150,9 +158,9 @@ class WorkspaceStore:
             if not changed:
                 return current
             business = any(key == BUSINESS_KEY or LEDGER_KEY.match(key) for key in changes)
-            return self._commit(current, storage, echo=False, snapshot=business)
+            return self._commit(current, storage, echo=False, snapshot=business, label=label, changed_keys=list(changes))
 
-    def _commit(self, current, storage, echo=True, snapshot=True):
+    def _commit(self, current, storage, echo=True, snapshot=True, label=None, journal=True, changed_keys=None):
         # 升级前快照的原文先搬出账本，账本里只留索引（迁移与限流都在这一步完成）。
         storage = self._externalize_upgrades(storage)
         result = {'formatVersion': 1, 'app': 'settlement-workbench',
@@ -168,12 +176,61 @@ class WorkspaceStore:
         # 只有账本类变化才留版本快照；主题/列宽这类高频设置不值得每次 fsync 一份 400KB。
         if snapshot:
             self._write_snapshot(result)
+        # 变更日志（S2-2.9）：记下「刚改了什么、改到哪个版本」，重启后据此给出一次撤销机会。
+        # 只写几十字节，撤销所需的上一个状态直接复用 r{rev-1} 快照，不额外复制整本账。
+        if journal:
+            self._write_change_journal(result, label, changed_keys)
         if not echo:
             # 增量写入只回执版本号，不再把整份账本（400KB+）回传一次。
             return {k: result[k] for k in ('formatVersion', 'app', 'revision', 'updatedAt')}
         return result
 
     PREVIOUS_MIN_INTERVAL = 300      # 秒；同一窗口内业务变更，previous 最多每 5 分钟刷新一次
+
+    # ── 变更日志与「重启后一次撤销」（S2-2.9）──────────────────────────
+    CHANGE_JOURNAL = 'workspace.last-change.json'
+
+    def _write_change_journal(self, result, label=None, changed_keys=None):
+        try:
+            keys = [k for k in (changed_keys if changed_keys is not None else result['storage'])
+                if k == BUSINESS_KEY or LEDGER_KEY.match(k)]
+            payload = {'revision': result['revision'], 'updatedAt': result['updatedAt'],
+                'label': label or '', 'keys': sorted(set(keys))}
+            self._atomic(self.root / self.CHANGE_JOURNAL,
+                (json.dumps(payload, ensure_ascii=False) + '\n').encode('utf-8'))
+        except OSError:
+            pass    # 日志只是附加保险，写不成不影响账目
+
+    def last_change(self):
+        try:
+            value = json.loads((self.root / self.CHANGE_JOURNAL).read_text(encoding='utf-8'))
+        except (OSError, ValueError):
+            return None
+        if not isinstance(value, dict) or type(value.get('revision')) is not int:
+            return None
+        return value
+
+    def consume_last_change(self):
+        """用掉这次撤销机会：删掉日志，同一份状态不会被撤销第二次。"""
+        try:
+            (self.root / self.CHANGE_JOURNAL).unlink()
+            return True
+        except OSError:
+            return False
+
+    def previous_state(self):
+        """上一个版本的整份内容：优先 r{rev-1} 快照（精确到一次变更），退回 previous.json。"""
+        current = self.read()
+        previous = current['revision'] - 1
+        snapshot = self.snapshot_dir / ('workspace.r%d.json' % previous)
+        for candidate in (snapshot, self.root / 'workspace.previous.json'):
+            try:
+                value = json.loads(candidate.read_text(encoding='utf-8'))
+            except (OSError, ValueError):
+                continue
+            if isinstance(value, dict) and isinstance(value.get('storage'), dict):
+                return {'revision': previous, 'updatedAt': value.get('updatedAt'), 'storage': value['storage']}
+        return None
 
     def _should_refresh_previous(self, snapshot):
         if not snapshot:

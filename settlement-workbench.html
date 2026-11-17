@@ -982,7 +982,10 @@ td.record-project .record-project-revision{display:block;font-size:12px;color:va
 <div id="calendarHover" class="calendar-hover" role="tooltip" hidden onmouseenter="keepCalendarDetails()" onmouseleave="closeCalendarDetails()"></div>
 
 <script src="assets/record-identity.js"></script>
+<script src="assets/revision-parse.js"></script>
+<script src="assets/exclusion-rules.js"></script>
 <script src="assets/billing-core.js"></script>
+<script src="assets/rate-snapshot.js"></script>
 <script src="assets/version-timeline.js"></script>
 <script src="assets/import-history.js"></script>
 <script src="assets/workspace-state.js"></script>
@@ -1316,7 +1319,16 @@ async function readMediaDuration(file) {
 
 function feeOf(proj, ep) { return SettlementBilling.fee(state.data.prices,proj,ep,state.data.premiumPrices); }
 // 不计价原因只认计价核心的枚举，界面各处不再各判一套（修改/手动排除/标记不计价/旧版本/Demo旧版/成片替换）。
-function exclusionText(ep){const key=SettlementBilling.exclusionReason(ep);return key?SettlementBilling.EXCLUSION_REASONS[key]:'';}
+function exclusionText(ep){
+  const key=SettlementBilling.exclusionReason(ep);
+  if(!key)return '';
+  // 手动排除 / 自动置零要说清「谁置的、为什么」（S2-2.2，D3 两者等权可覆盖）。
+  if(key==='excluded'){
+    const who=SettlementExclusion.label(ep)||'人工置零';
+    return ep.excludeReason?who+'：'+ep.excludeReason:who;
+  }
+  return SettlementBilling.EXCLUSION_REASONS[key];
+}
 // 阶梯项目里区间没覆盖到的记录：按项目默认等级兜底计价（不再算 0），这里集中统计并在汇总行提示补区间。
 function staircaseGapHint(){
   let count=0;const names=[];
@@ -1328,6 +1340,18 @@ function staircaseGapHint(){
   }
   if(!count)return '';
   return ` ｜ ⚠ ${count}条超出阶梯区间，已按项目默认等级兜底计价（${names.slice(0,3).join('、')}${names.length>3?' 等':''}），建议补全区间`;
+}
+// 待定级：导入或手工登记时没定等级、项目也没有默认等级（S2-2.4 不再默认 C）。
+// 这些记录计 0 元，但必须在汇总行说出来，避免「静默漏钱」。
+function unratedHint(){
+  let count=0;const names=[];
+  for(const p of state.data.projects){
+    let hit=0;
+    for(const r of Object.values(p.episodes))if(SettlementBilling.needsGrade(p,r)&&SettlementBilling.isBillable(r))hit++;
+    if(hit){count+=hit;names.push(p.name+' '+hit+'条');}
+  }
+  if(!count)return '';
+  return ` ｜ ⚠ ${count}条待定级、按 0 计（${names.slice(0,3).join('、')}${names.length>3?' 等':''}），请到项目设置里定级`;
 }
 function projectDisplayName(project){const text=(project.name).replace(/^《(.*)》$/,'$1');return '《'+text+'》';}
 function projectCell(project){return `<td class="record-project" title="${attrStr(project.name)}">${esc(projectDisplayName(project))}</td>`;}
@@ -1361,9 +1385,11 @@ function displayWorkType(e){
 function workTypeClass(type){return type==='修改'?'work-revise':type==='重混'?'work-remix':'work-mix';}
 
 function periodKey(dateStr) {
+  // 未初始化时按自然月，避免启动期把半月口径写进记录（S2-2.7 period 要冻结）。
+  const cycle = state.cycle || 'natural';
   const d = new Date(dateStr + 'T00:00:00');
   const y = d.getFullYear(), m = d.getMonth(), day = d.getDate();
-  if (state.cycle === 'natural') return `${y}-${String(m+1).padStart(2,'0')}`;
+  if (cycle === 'natural') return `${y}-${String(m+1).padStart(2,'0')}`;
   if (day <= 15) {
     const pm = m===0?11:m-1, py = m===0?y-1:y;
     return `${py}-${String(pm+1).padStart(2,'0')}下/${y}-${String(m+1).padStart(2,'0')}上`;
@@ -1377,6 +1403,21 @@ function periodLabel(key) {
  const m=key.match(/^(\d{4})-(\d{2})下\/(\d{4})-(\d{2})上$/);
  return m?`${m[1]}年${Number(m[2])}月16日—${m[3]}年${Number(m[4])}月15日`:key;
 }
+
+// 结算期起止日期（D4：界面默认按自然月看，但导出一律写起止日期）。
+// 期间名在记录里冻结（S2-2.7），所以改 cycle 设置不会改写历史期间。
+function periodRange(key) {
+ const pad=(n)=>String(n).padStart(2,'0');
+ const lastDay=(y,m)=>new Date(y,m,0).getDate();
+ const natural=key.match(/^(\d{4})-(\d{2})$/);
+ if(natural){const y=Number(natural[1]),m=Number(natural[2]);return {start:y+'-'+pad(m)+'-01',end:y+'-'+pad(m)+'-'+pad(lastDay(y,m))};}
+ const half=key.match(/^(\d{4})-(\d{2})下\/(\d{4})-(\d{2})上$/);
+ if(half){return {start:half[1]+'-'+pad(Number(half[2]))+'-16',end:half[3]+'-'+pad(Number(half[4]))+'-15'};}
+ const ymd=String(key||'');
+ const ok=/^\d{4}-\d{2}-\d{2}$/.test(ymd);
+ return {start:ok?ymd:'',end:ok?ymd:''};
+}
+
 
 // ═══════════════════════════════════════════════════════
 // 渲染
@@ -1401,7 +1442,7 @@ function render() {
   document.getElementById('historyRecords').hidden=!hasRecordFilters();
   const s = calcSummary(cardPeriod,day);
   const billedAll=allEpisodes().filter(e=>e.billable),fcBilled=billedAll.filter(e=>e.priceBasis==='finalcut').length,dcBilled=billedAll.length-fcBilled;
-  document.getElementById('billingSummary').textContent = `工作记录：${s.types} ｜ 计价 ${s.billed}条 / ${s.billedMin.toFixed(1)}分钟 ｜ 不计价 ${s.excluded}条 ｜ 待核对 ${s.pending}条 ｜ 按成片 ${fcBilled} 集 / 按交付工程 ${dcBilled} 集` + staircaseGapHint();
+  document.getElementById('billingSummary').textContent = `工作记录：${s.types} ｜ 计价 ${s.billed}条 / ${s.billedMin.toFixed(1)}分钟 ｜ 不计价 ${s.excluded}条 ｜ 待核对 ${s.pending}条 ｜ 按成片 ${fcBilled} 集 / 按交付工程 ${dcBilled} 集` + staircaseGapHint() + unratedHint();
   document.getElementById('cardEps').innerHTML = s.eps+'<small class="stat-unit">条</small>';
   document.getElementById('cardMin').innerHTML = s.min.toFixed(1)+'<small class="stat-unit">分钟</small>';
   document.getElementById('cardFee').textContent = '¥' + s.fee.toLocaleString('zh-CN',{minimumFractionDigits:2})+'元';
@@ -1585,7 +1626,7 @@ function loadColCfg() {
 }
 function saveColCfg(cfg) { if(workspaceBootError)return toast('工作区存储未就绪，列配置未保存');workspaceStorage.setItem(COL_KEY, JSON.stringify(cfg)); }
 function colLabel(k) { const c = EP_COLS.find(x => x.key === k); return c ? c.label : k; }
-function recordVersionLabel(r,p){const n=(r.type||p.type)==='Demo'&&r.demoRevision?r.demoRevision.version:Number(String(r.sourceFile||r.sourcePath||'').replace(/\\/g,'/').split('/').at(-1).match(/(?:^|[^a-z0-9])v(\d+)(?=$|[^0-9])/i)?.[1]||0);return Number.isFinite(n)&&n>0?'V'+String(n).padStart(2,'0'):'—';}
+function recordVersionLabel(r,p){const n=(r.type||p.type)==='Demo'&&r.demoRevision?r.demoRevision.version:SettlementRevision.versionOf(r.sourceFile||r.sourcePath||'');return Number.isFinite(n)&&n>0?'V'+String(n).padStart(2,'0'):'—';}
 function recordColumnLabel(k,list){if(k==='duration')return settings.durationDisplay==='minutes'?'分钟':'时长';if(k!=='epNo')return colLabel(k);return '集数';}
 function visibleCols(isCal) {
   const cfg = loadColCfg();
@@ -1604,7 +1645,7 @@ function epCellHtml(e, key) {
  switch(key){
  case 'epNo':return '<td class="record-name" title="'+attrStr(e.label)+'">'+esc(e.type==='Demo'?'EP'+String(e.proj.episodes[e.epNo].episodeNo||1).padStart(2,'0'):e.label)+'</td>';
  case 'proj':return e.type==='Demo'?demoProjectCell(e):projectCell(e.proj);
- case 'grade':return `<td>${esc(e.grade)}</td>`;
+ case 'grade':return `<td>${esc(e.grade||'待定级')}</td>`;
  case 'type':return `<td>${esc(e.type)}</td>`;
  case 'work':return `<td class="${workTypeClass(e.workType)}">${esc(e.workType)}${e.needsReview?' · 待核对':''}</td>`;
  case 'billing':return `<td title="${esc(e.excludeLabel||(e.billable?'':'不计价'))}">${e.billable?'计价':'不计价'}</td>`;
@@ -2102,8 +2143,7 @@ function buildFinalCutLedger(next,projectName,files){
   const originalDuration=prev?.finalCut?.originalDuration||orig.duration;
   const originalSourceFile=prev?.finalCut?.originalSourceFile||orig.sourceFile||orig.sourcePath||'';
   orig.finalCutSuperseded=true;
-  orig.excluded=true;
-  orig.excludeReason='参考·已被成片替换';
+  SettlementExclusion.setAuto(orig,true,'参考·已被成片替换');
   orig.note='参考·已被成片替换';
   p.episodes[key]={
    date:orig.date,duration:item.duration,episodeNo:epNo,label:'EP'+Number(epNo),
@@ -2122,8 +2162,7 @@ function restoreOriginalEpisode(p,epNo){
  const r=entry[1];
  if(!r.finalCutSuperseded)return;
  delete r.finalCutSuperseded;delete r.note;
- r.excluded=!!r.finalCutOriginalExcluded;
- r.excludeReason=r.finalCutOriginalExcludeReason||'';
+ SettlementExclusion.setManual(r,!!r.finalCutOriginalExcluded,r.finalCutOriginalExcluded?(r.finalCutOriginalExcludeReason||'成片替换前已排除'):'');
  delete r.finalCutOriginalExcluded;delete r.finalCutOriginalExcludeReason;
 }
 async function finalCutReadDir(entry,rootName,trail,out){
@@ -2385,9 +2424,11 @@ function saveEp() {
  const no=document.getElementById('f_ep').value.trim(),type=document.getElementById('f_type').value,label=document.getElementById('f_label').value.trim(),date=document.getElementById('f_date').value,duration=document.getElementById('f_dur').value.trim();
  if(no&&!/^\d+$/.test(no)||!no&&(type!=='Demo'||!label))return toast('正式制作需集号；无集号Demo需填写名称');
  if(!validDate(date)||!validDuration(duration))return toast('请检查有效日期和时长');
- const key=no?String(Number(no)):'demo:'+label;if(p.episodes[key])return toast('记录已存在，请编辑原记录或通过WAV导入另存');
- if(no){const same=SettlementVersion.findEpisodeKey(p,no);if(same&&same!==key)return toast('第'+no+'集已有记录（键 '+same+'），请编辑原记录；如确需另存请用WAV导入');}
- p.episodes[key]={grade:gradeForNumber(p,no),recordId:SettlementIdentity.newId('record'),date,dateSource:'manual',duration,type,label:no?'EP'+Number(no):label,episodeNo:no||null,mode:document.getElementById('f_mode').value,...readWorkFields('f')};
+ const key=no?String(Number(no)):'demo:'+label;const work=readWorkFields('f');
+ if(p.episodes[key])return toast('记录已存在，请编辑原记录或通过WAV导入另存');
+ // S2-2.6：判重按「集号 + 工作类型」，混音 EP3 在时仍可登记重混 EP3。
+ if(no){const same=SettlementVersion.findEpisodeKey(p,no,work.workType);if(same&&same!==key)return toast('第'+no+'集已有'+work.workType+'记录（键 '+same+'），请编辑原记录；如确需另存请用WAV导入');}
+ p.episodes[key]=SettlementRates.stamp(p,{grade:gradeForNumber(p,no),recordId:SettlementIdentity.newId('record'),date,dateSource:'manual',duration,type,label:no?'EP'+Number(no):label,episodeNo:no||null,mode:document.getElementById('f_mode').value,...readWorkFields('f')},next.prices,next.premiumPrices);
  if(commitDataChange(next,'登记')){closeModal();toast('已登记，可撤销');}
 }
 
@@ -2453,7 +2494,14 @@ function openPrices() {
  openModal(`<h2>修改单价</h2><p class="review-hint">保存后重算该类别全部历史记录，可撤销；修改和排除记录仍不计费。</p>${rows}<p id="priceError" role="alert"></p><div class="modal-actions"><button class="btn" onclick="savePrices()">保存并重算</button><button class="btn secondary" onclick="closeModal()">取消</button></div>`);
 }
 function savePrices() {
- const next=normalizeData(state.data);for(const [prefix,prices,grades] of [['',next.prices,['D']],['premium',next.premiumPrices,['A','B','C']]])for(const g of grades){const rate={};for(const [key,suffix] of [['per_min','min'],['per_ep','ep']]){const raw=document.getElementById('p_'+prefix+g+'_'+suffix).value.trim(),value=Number(raw);if(!raw||!Number.isFinite(value)||value<0||value>100000000){document.getElementById('priceError').textContent='单价需为0至100000000之间的有效数字';return;}rate[key]=value;}prices[g]=rate;}if(commitDataChange(next,'改单价')){closeModal();toast('已更新单价，可撤销');}
+ const next=normalizeData(state.data);const stamps={};
+ for(const [prefix,prices,grades] of [['',next.prices,['D']],['premium',next.premiumPrices,['A','B','C']]])for(const g of grades){const rate={};for(const [key,suffix] of [['per_min','min'],['per_ep','ep']]){const raw=document.getElementById('p_'+prefix+g+'_'+suffix).value.trim(),value=Number(raw);if(!raw||!Number.isFinite(value)||value<0||value>100000000){document.getElementById('priceError').textContent='单价需为0至100000000之间的有效数字';return;}rate[key]=value;}
+  // 记下每个等级最后一次改价时间（S2-2.10）：历史记录金额不变，只留一个「从何时起生效」。
+  const before=prices[g],from=prefix?`premium:${g}`:g;
+  if(before&&(before.per_min!==rate.per_min||before.per_ep!==rate.per_ep))stamps[from]=new Date().toISOString();
+  prices[g]=rate;}
+ if(Object.keys(stamps).length)next.priceUpdatedAt={...(next.priceUpdatedAt||{}),...stamps};
+ if(commitDataChange(next,'改单价')){closeModal();toast('已更新单价，只影响此后新登记的记录，历史记录金额不变，可撤销');}
 }
 function categoryOf(p){return p.billingCategory||(p.grade==='D'?'automation':'legacy');}
 function uiCategory(p){return p.billingCategory==='automation'||(!p.billingCategory||p.billingCategory==='legacy')&&p.grade==='D'?'automation':'premium';}
@@ -2578,7 +2626,7 @@ async function exportXlsx() {
 
   // Sheet2 项目明细（按日期排序，带 period 分组）
   const list = allEpisodes();
-  const dRows = [['序号','等级','类型','项目','集数/记录','日期','时长','分钟','计价方式','单价','小计','交付路径','工作类型','是否计价','排除原因','待核对','来源文件','项目创建日期','交付日期来源','结算依据','备注']];
+  const dRows = [['序号','等级','类型','项目','集数/记录','日期','时长','分钟','计价方式','单价','小计','交付路径','工作类型','是否计价','排除原因','待核对','来源文件','项目创建日期','交付日期来源','结算依据','备注','期间','期间起','期间止']];
   let seq = 0;
   for (const e of list) {
     seq++;
@@ -2587,7 +2635,7 @@ async function exportXlsx() {
     const fee = e.fee;
     dRows.push([seq, (categoryOf(e.proj)==='premium'?'精品剧 ':categoryOf(e.proj)==='automation'?'自动化 ':'')+e.grade, e.type, e.proj.name, e.label,
       e.date, e.duration, Math.round(e.sec/60*100)/100, e.mode, unit,
-      Math.round(fee*100)/100, e.proj.path,e.workType,e.billable?'是':'否',e.excludeReason,e.needsReview?'是':'否',e.proj.episodes[e.epNo].sourceFile||'',e.proj.createdDate||'',dateSourceLabel(e.proj.episodes[e.epNo].dateSource),e.priceBasis==='finalcut'?'成片':'交付工程',e.note||'']);
+      Math.round(fee*100)/100, e.proj.path,e.workType,e.billable?'是':'否',e.excludeReason,e.needsReview?'是':'否',e.proj.episodes[e.epNo].sourceFile||'',e.proj.createdDate||'',dateSourceLabel(e.proj.episodes[e.epNo].dateSource),e.priceBasis==='finalcut'?'成片':'交付工程',e.note||'',e.proj.episodes[e.epNo].period||periodKey(e.date),periodRange(e.proj.episodes[e.epNo].period||periodKey(e.date)).start,periodRange(e.proj.episodes[e.epNo].period||periodKey(e.date)).end]);
   }
   const billRows=[['项目','记录','工作类型','日期','时长','金额','排除原因']];
   for(const e of list.filter(e=>e.billable))billRows.push([e.proj.name,e.label,e.workType,e.date,e.duration,e.fee,e.excludeReason]);
@@ -2636,22 +2684,19 @@ function normalizeData(data) {
       if (!e.workType && e.rework) e.needsReview = true;
       e.workType = workTypeOf(e);
       e.excluded = !!e.excluded || e.billable === false;
+      SettlementExclusion.normalize(e);   // 历史数据补 excludeSource（S2-2.2）
+      // S2-2.7：结算期与显示编号第一次写入后就不再变（改口径设置也不会改写历史）。
+      e.period=e.period||periodKey(e.date);
       if (e.workType === '修改') e.excludeReason = e.excludeReason || '修改不计价';
     }
-    // 旧版本不计价：同集同工作类型只保留最高版本，其余隐藏并按 0 元结算。
-    const superseded = new Set(SettlementVersion.supersededKeys(p));
-    for (const [key, e] of Object.entries(p.episodes)) {
-      if (superseded.has(key)) {
-        e.versionSuperseded = true;
-        e.excluded = true;
-        if (!e.excludeReason || e.excludeReason.includes('版本')) e.excludeReason = '旧交付版本（仅最高版本计费）';
-      } else if (e.versionSuperseded && (!e.excludeReason || e.excludeReason.includes('版本'))) {
-        delete e.versionSuperseded;
-        e.excluded = false;
-        e.excludeReason = '';
-      }
-    }
+    p.displayNo=Number(p.displayNo)||null;
+    // 旧版本不计价：只保留最高版本，其余按 0 元结算。
+    // 实现已收敛到 version-reconciliation.js 的唯一 reconcile（S2-2.3），这里不再另算一套。
   }
+  if (typeof assignDisplayNumbers === 'function') assignDisplayNumbers(d);
+  if (typeof reconcileFormalVersions === 'function') reconcileFormalVersions(d);
+  // S2-2.10：还没有单价的记录按当前价回填一次，之后金额只看记录内快照。
+  SettlementRates.ensure(d);
   return SettlementIdentity.ensure(d);
 }
 const dataUndoStack = [];
@@ -2702,7 +2747,7 @@ function readWorkFields(prefix) {const type=document.getElementById(prefix+'_wor
 function applyBatchWorkChanges(items,type,excluded,reason) {
   if(!['混音','重混','修改'].includes(type))throw Error('工作类型无效');
   const next=normalizeData(state.data);
-  for(const it of items){const p=next.projects.find(p=>p.name===it.projName);const ep=p?.episodes[it.epNo];if(!ep)throw Error('记录已变化，请重新选择');Object.assign(ep,{workType:type,rework:type==='重混',excluded:!!excluded||type==='修改',excludeReason:type==='修改'?(reason||'修改不计价'):reason||'',needsReview:false});delete ep.billable;}
+  for(const it of items){const p=next.projects.find(p=>p.name===it.projName);const ep=p?.episodes[it.epNo];if(!ep)throw Error('记录已变化，请重新选择');Object.assign(ep,{workType:type,rework:type==='重混',needsReview:false});SettlementExclusion.setManual(ep,!!excluded||type==='修改',type==='修改'?(reason||'修改不计价'):reason||'');delete ep.billable;}
   return commitDataChange(next,'批量纠正');
 }
 function selectedRecordItems() {const items=new Map();for(const el of document.querySelectorAll('.view.active .epchk:checked'))items.set(JSON.stringify([el.dataset.p,el.dataset.e]),{projName:el.dataset.p,epNo:el.dataset.e});return [...items.values()];}
@@ -2727,7 +2772,8 @@ function buildBatchCorrection(items,patch) {
     before+=feeOf(p,ep);Object.assign(ep,patch);if(patch.date!==undefined)ep.dateSource='manual';
     if(patch.workType!==undefined){ep.rework=patch.workType==='重混';if(patch.needsReview===undefined)ep.needsReview=false;}
     if(patch.excluded!==undefined)delete ep.billable;
-    if(workTypeOf(ep)==='修改'){ep.excluded=true;ep.excludeReason=patch.excludeReason||ep.excludeReason||'修改不计价';}
+    if(patch.excluded!==undefined)SettlementExclusion.setManual(ep,patch.excluded,patch.excludeReason||'');
+    if(workTypeOf(ep)==='修改'){SettlementExclusion.setAuto(ep,true,patch.excludeReason||ep.excludeReason||'修改不计价');}
     after+=feeOf(p,ep);
   }
   const checked=validateBackup(next);if(!checked.ok)throw Error(checked.error);
@@ -2929,7 +2975,7 @@ function confirmMultiProjectImport(){
     let key=importTargetKey(r,g.config,p);if(seen.has(key)&&r.action!=='append')throw Error(p.name+'预览中集号重复，请跳过或另存');seen.add(key);
     if(r.action==='add'&&p.episodes[key])throw Error(p.name+'记录已存在，请重新预览');if(r.action==='update'&&!p.episodes[key])throw Error(p.name+'更新目标已变化');
     if(r.action==='append'){const base=key+'@'+Date.now();key=base;let n=0;while(p.episodes[key])key=base+'-'+(++n);}
-    const recordId=r.action==='update'?p.episodes[key].recordId:SettlementIdentity.newId('record');p.episodes[key]={...importRowRecord(r,g.config),recordId};count++;
+    const recordId=r.action==='update'?p.episodes[key].recordId:SettlementIdentity.newId('record');p.episodes[key]=SettlementRates.stamp(p,{...importRowRecord(r,g.config),recordId},next.prices,next.premiumPrices);count++;
    }
   }
   if(!count)throw Error('没有选入记录，未写入项目');
@@ -3006,7 +3052,7 @@ function confirmImport(){
   const selected=rows.filter(r=>r.action!=='skip');if(!selected.length)return toast('没有选入记录');
   const keys=new Set();for(const r of selected){if(!validDate(r.date)||r.episodeNo&&!/^\d+$/.test(r.episodeNo)||!r.episodeNo&&(r.type||config.type)!=='Demo')return toast('请检查集号与日期');const key=importTargetKey(r,config,p);if(keys.has(key)&&r.action!=='append')return toast('预览中集号重复，请分别选择另存或跳过');keys.add(key);}
   if(!p){p={id:SettlementIdentity.newId('project'),name:config.name,createdDate:config.createdDate||'',billingCategory:config.billingCategory,gradeRanges:config.gradeRanges,grade:config.grade,type:config.type,mode:config.mode,path:'',aliases:[],episodes:{}};next.projects.push(p);}
-  for(const r of selected){let key=importTargetKey(r,config,p);if(r.action==='append'){const base=key+'@'+Date.now();key=base;let n=1;while(p.episodes[key])key=base+'-'+n++;}else if(r.action==='add'&&p.episodes[key])return toast('记录冲突，请重新预览');const recordId=r.action==='update'?p.episodes[key]?.recordId:SettlementIdentity.newId('record');p.episodes[key]={...importRowRecord(r,config),recordId:recordId||SettlementIdentity.newId('record')};}
+  for(const r of selected){let key=importTargetKey(r,config,p);if(r.action==='append'){const base=key+'@'+Date.now();key=base;let n=1;while(p.episodes[key])key=base+'-'+n++;}else if(r.action==='add'&&p.episodes[key])return toast('记录冲突，请重新预览');const recordId=r.action==='update'?p.episodes[key]?.recordId:SettlementIdentity.newId('record');p.episodes[key]=SettlementRates.stamp(p,{...importRowRecord(r,config),recordId:recordId||SettlementIdentity.newId('record')},next.prices,next.premiumPrices);}
   if(commitDataChange(next,'导入')){closeModal();toast('已导入'+selected.length+'条，可撤销');}
 }
 
@@ -3565,6 +3611,22 @@ document.getElementById('cycleSelect').addEventListener('change', e => {
 });
 loadData();
 state.pendingPeriod=periodKey(localToday());
+// S2-2.9：上次退出前的那次变更，重启后给一次撤销机会。复用同一套撤销栈，
+// 不另立机制——按下「↩ 撤销」照常写新版本、留快照，日志随即删除所以只能用一次。
+(function restoreRestartUndo(){
+  const hook=window.desktopWorkspace&&window.desktopWorkspace.restartUndo;
+  if(!hook||workspaceBootError)return;
+  const raw=hook.storage&&hook.storage['settlement_v1'];
+  if(!raw)return;
+  try{
+    const checked=validateBackup(JSON.parse(raw));
+    if(!checked.ok)return;
+    dataUndoStack.push({data:checked.data,label:hook.label||'上次变更',raw,before:null,blocked:false});
+    updateDataUndoUI();
+    toast('上次退出前的「'+(hook.label||'变更')+'」还可以撤销一次');
+    window.desktopWorkspace.consumeRestartUndo();
+  }catch(_){}
+})();
 
 // ═══════════════════════════════════════════════════════
 // 玻璃微调面板（2026-09-30 S3 · 自 pt-audio-toolkit glass-tuner.js 去桥移植）

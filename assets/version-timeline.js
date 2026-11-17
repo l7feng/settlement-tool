@@ -26,8 +26,10 @@
     const lead = String(key).match(/^\d+/);
     return lead ? 'EP' + Number(lead[0]) : null;
   }
-  // 版本号认来源文件名里的 Vxx、第N版或版本N；没有版本号的记录视为独立一条交付。
+  // 版本号认来源文件名里的 Vxx、第N版或版本N；没有版本号的记录视为独立一条交付（返回 0）。
+  // 解析实现已统一到 SettlementRevision（S2-2.1），这里只保留对外函数名。
   function versionNumber(record) {
+    if (scope.SettlementRevision) return scope.SettlementRevision.versionOf((record && record.sourceFile) || (record && record.sourcePath) || '');
     const name = String((record && record.sourceFile) || (record && record.sourcePath) || '').replace(/\\/g, '/').split('/').at(-1);
     const latin = name.match(VERSION_RE);
     if (latin) return Number(latin[1]);
@@ -134,12 +136,15 @@
     return scored[0];
   }
   // 同集既有记录的键（'02' 与 '2' 视为同一集），登记时用于防重复。
-  function findEpisodeKey(project, episodeNo) {
+  // S2-2.6：带上工作类型——混音 EP3 存在时，重混 EP3 是另一份工作，不该被判重复。
+  function findEpisodeKey(project, episodeNo, workType) {
     const n = Number(episodeNo);
     if (!Number.isFinite(n)) return null;
     for (const [key, record] of Object.entries((project && project.episodes) || {})) {
       const num = episodeNumber(key, record);
-      if (num !== null && num === n) return key;
+      if (num === null || num !== n) continue;
+      if (workType && workTypeOf(record) !== workType) continue;
+      return key;
     }
     return null;
   }

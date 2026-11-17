@@ -3,7 +3,9 @@ function demoWorkName(project,record){return record.demoName||(!project.demoBuck
 function demoWorkKey(name){return name.normalize('NFKC').trim().replace(/\s+/g,' ').toLocaleLowerCase();}
 function demoSourceMeta(path){
  const meta=SettlementImportMetadata.infer(path,[]),base=String(path).replace(/\\/g,'/').split('/').at(-1),names={'一':1,'二':2,'三':3,'四':4,'五':5,'六':6,'七':7,'八':8,'九':9,'十':10,'十一':11,'十二':12};
- return {name:meta.name||base.replace(/\.(wav|mp4)$/i,''),take:names[meta.segment]||1,version:Number(base.match(/(?:^|[^a-z0-9])v(\d+)(?=$|[^0-9])/i)?.[1]||1),explicit:meta.categorySource==='名称标记',category:meta.categorySource==='名称标记'?meta.billingCategory:'automation',grade:meta.categorySource==='名称标记'?meta.grade:'D'};
+ // 版号统一走 SettlementRevision（S2-2.1）：认得出「第十三版」这类中文数字，不再一律回落成 V01。
+ const revision=SettlementRevision.parseRevision(base);
+ return {name:meta.name||base.replace(/\.(wav|mp4)$/i,''),take:names[meta.segment]||revision.take||1,version:revision.version||1,explicit:meta.categorySource==='名称标记',category:meta.categorySource==='名称标记'?meta.billingCategory:'automation',grade:meta.categorySource==='名称标记'?meta.grade:'D'};
 }
 function recordDemoRevision(project,record){
  if(record.demoRevision)return record.demoRevision;
@@ -11,11 +13,21 @@ function recordDemoRevision(project,record){
  return {take:hint.take,version:hint.version};
 }
 function compareDemoRevision(a,b){return a.revision.take-b.revision.take||a.revision.version-b.revision.version||a.date.localeCompare(b.date);}
+// S2-2.7：项目显示编号首次生成后固定写入 p.displayNo（追加在末尾），
+// 不再因为补录一条旧日期就把整表重新排号。normalizeData 每次提交都会调用，新项目自动领号。
+function assignDisplayNumbers(d){
+ const formal=d.projects.filter(p=>Object.values(p.episodes||{}).some(e=>(e.type||p.type)!=='Demo')||(!Object.keys(p.episodes||{}).length&&p.type!=='Demo'));
+ const date=p=>p.createdDate||Object.values(p.episodes||{}).filter(e=>(e.type||p.type)!=='Demo').map(e=>e.date).sort()[0]||'9999-99-99';
+ const used=new Set(formal.map(p=>Number(p.displayNo)).filter(n=>n>0));
+ let cursor=used.size?Math.max(...used):0;
+ const missing=formal.filter(p=>!(Number(p.displayNo)>0)).sort((a,b)=>date(a).localeCompare(date(b))||a.name.localeCompare(b.name,'zh-CN',{numeric:true}));
+ for(const p of missing){do{cursor++;}while(used.has(cursor));used.add(cursor);p.displayNo=cursor;}
+}
 function chronologyNumbers(){
  const formal=state.data.projects.filter(p=>Object.values(p.episodes).some(e=>(e.type||p.type)!=='Demo')||(!Object.keys(p.episodes).length&&p.type!=='Demo'));
  const date=p=>p.createdDate||Object.values(p.episodes).filter(e=>(e.type||p.type)!=='Demo').map(e=>e.date).sort()[0]||'9999-99-99';
  formal.sort((a,b)=>date(a).localeCompare(date(b))||a.name.localeCompare(b.name,'zh-CN',{numeric:true}));
- const projects=new Map(formal.map((p,i)=>[p.id||p.name,String(i+1).padStart(2,'0')])),works=new Map();
+ const projects=new Map(formal.map((p,i)=>[p.id||p.name,String(Number(p.displayNo)||i+1).padStart(2,'0')])),works=new Map();
  for(const p of state.data.projects)for(const r of Object.values(p.episodes))if((r.type||p.type)==='Demo'){const name=demoWorkName(p,r),key=demoWorkKey(name),previous=works.get(key);if(!previous||r.date<previous.date)works.set(key,{name,date:r.date});}
  const demos=new Map([...works].sort((a,b)=>a[1].date.localeCompare(b[1].date)||a[1].name.localeCompare(b[1].name,'zh-CN',{numeric:true})).map(([key],i)=>[key,String(i+1).padStart(2,'0')]));
  return {projects,demos};
@@ -48,12 +60,12 @@ function buildDemoImportPlan(){
  for(const p of next.projects)for(const r of Object.values(p.episodes))if((r.type||p.type)==='Demo'){const revision=recordDemoRevision(p,r);if(r.sourceFile)known.add(r.demoFingerprint||demoFingerprint(demoWorkName(p,r),revision.take,revision.version,r.sourceFile));}
  for(const r of selected){if(!r.name.trim()||r.name.length>200)throw Error('请填写作品名（最多200字）');if(!validDate(r.date)||!Number.isInteger(r.take)||r.take<1||r.take>9999||!Number.isInteger(r.version)||r.version<1||r.version>9999)throw Error('请检查日期和版本号');if(!r.duration||r.error)throw Error(r.name+'时长读取失败，请取消勾选或重新读取');if(!['automation','premium'].includes(r.category)||!(r.category==='automation'?['D']:['A','B','C']).includes(r.grade))throw Error('类别或等级无效');
   const fingerprint=demoFingerprint(r.name,r.take,r.version,r.path);if(known.has(fingerprint)){statuses.set(r.id,'同名同版本已登记，跳过');continue;}known.add(fingerprint);
-  const p=demoBucket(next,r.category),key='demo:'+r.id,workKey=demoWorkKey(r.name);p.episodes[key]={recordId:r.id,type:'Demo',workType:'混音',episodeNo:null,label:r.name+' · 第'+r.take+'版 / V'+String(r.version).padStart(2,'0'),demoName:r.name.trim(),demoWorkKey:workKey,demoRevision:{take:r.take,version:r.version},demoFingerprint:fingerprint,date:r.date,dateSource:r.dateSource,duration:r.duration,grade:r.grade,mode:r.mode,excluded:false,excludeReason:'',sourceFile:r.path};affected.add(workKey);added++;
+  const p=demoBucket(next,r.category),key='demo:'+r.id,workKey=demoWorkKey(r.name);p.episodes[key]=SettlementRates.stamp(p,{recordId:r.id,type:'Demo',workType:'混音',episodeNo:null,label:r.name+' · 第'+r.take+'版 / V'+String(r.version).padStart(2,'0'),demoName:r.name.trim(),demoWorkKey:workKey,demoRevision:{take:r.take,version:r.version},demoFingerprint:fingerprint,date:r.date,dateSource:r.dateSource,duration:r.duration,grade:r.grade,mode:r.mode,excluded:false,excludeReason:'',sourceFile:r.path},next.prices,next.premiumPrices);affected.add(workKey);added++;
  }
  const changes=[];
  for(const workKey of affected){const versions=[];for(const p of next.projects)for(const [key,r]of Object.entries(p.episodes))if((r.type||p.type)==='Demo'&&demoWorkKey(demoWorkName(p,r))===workKey&&r.workType!=='修改'&&(!r.excluded&&r.billable!==false||r.demoSuperseded===true)){versions.push({p,key,r,revision:recordDemoRevision(p,r),date:r.date});}
   versions.sort(compareDemoRevision);if(versions.length>1&&compareDemoRevision(versions.at(-1),versions.at(-2))===0)throw Error(demoWorkName(versions.at(-1).p,versions.at(-1).r)+'最新版存在同日期同版本的多个文件，请只勾选一个或修正版本号');const winner=versions.at(-1);
-  for(const item of versions){const {p,key,r}=item,old=state.data.projects.find(x=>x.id===p.id)?.episodes[key],was=old?SettlementBilling.fee(next.prices,p,old,next.premiumPrices):0;if(item===winner){if(r.demoSuperseded){r.excluded=false;delete r.demoSuperseded;r.excludeReason='';}}else{r.excluded=true;r.demoSuperseded=true;r.excludeReason='Demo旧版本（仅最新版计费）';}const fee=SettlementBilling.fee(next.prices,p,r,next.premiumPrices);if(statuses.has(r.recordId)===false&&x.rows.some(row=>row.id===r.recordId))statuses.set(r.recordId,item===winner?'最新版计费 ¥'+fee.toFixed(2):'旧版本保留，不计费');if(old&&was!==fee)changes.push({name:demoWorkName(p,r),label:r.label||key,before:was,after:fee});}
+  for(const item of versions){const {p,key,r}=item,old=state.data.projects.find(x=>x.id===p.id)?.episodes[key],was=old?SettlementBilling.fee(next.prices,p,old,next.premiumPrices):0;if(item===winner){if(r.demoSuperseded){delete r.demoSuperseded;SettlementExclusion.clearAuto(r);}}else{r.demoSuperseded=true;SettlementExclusion.setAuto(r,true,'Demo旧版本（仅最新版计费）');}const fee=SettlementBilling.fee(next.prices,p,r,next.premiumPrices);if(statuses.has(r.recordId)===false&&x.rows.some(row=>row.id===r.recordId))statuses.set(r.recordId,item===winner?'最新版计费 ¥'+fee.toFixed(2):'旧版本保留，不计费');if(old&&was!==fee)changes.push({name:demoWorkName(p,r),label:r.label||key,before:was,after:fee});}
  }
  const checked=validateBackup(next);if(!checked.ok)throw Error(checked.error);const before=backupStats(state.data).amount,after=backupStats(checked.data).amount;return {next:checked.data,statuses,changes,added,before,after,source:x.source};
 }

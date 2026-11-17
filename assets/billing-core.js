@@ -14,7 +14,8 @@
     optOut: '标记为不计价',
     demo: 'Demo旧版本不计价',
     version: '旧版本不计价',
-    finalcut: '已被成片替换'
+    finalcut: '已被成片替换',
+    unrated: '待定级（未计价）'
   });
   function exclusionReason(record) {
     if (workType(record) === '修改') return 'modify';
@@ -67,10 +68,19 @@
     const level=project&&project.grade;
     return ['A','B','C'].includes(level)?level:'C';
   }
-  /** 定级：非阶梯项目沿用记录/项目自身等级；阶梯项目按区间命中，未覆盖按默认等级兜底。 */
+  /** 定级：非阶梯项目沿用记录/项目自身等级（都没有则返回 null＝待定级）；阶梯项目按区间命中，未覆盖按默认等级兜底。 */
   function grade(project,record){
-    if(!usesStaircase(project,record))return record.grade||project.grade;
+    if(!usesStaircase(project,record))return record.grade||project.grade||null;
     return rangeLevel(project,record)??fallbackLevel(project);
+  }
+  /** 待定级：能计价但定不出等级（S2-2.4 导入不再默认 C）。返回 true 时界面上必须显式提示，不能静默按 0 计。 */
+  function needsGrade(project,record){
+    if(record&&record.excluded)return false;
+    const level=grade(project,record);
+    if(level==null)return true;
+    if(project.billingCategory==='premium')return !['A','B','C'].includes(level);
+    if(project.billingCategory==='automation')return level!=='D';
+    return false;
   }
   /** 阶梯项目里「区间没覆盖到、已按默认等级兜底」的记录：用于汇总行提示补区间。 */
   function unmatched(project,record){return usesStaircase(project,record)&&rangeLevel(project,record)==null;}
@@ -82,8 +92,9 @@
     if(project.billingCategory==='automation'&&level!=='D')throw Error('自动化只允许D等级');
     return prices[level];
   }
+  /** 单价（界面展示用）：与 fee 取同一来源，避免「显示新价、算的是旧价」。 */
   function price(prices,project,record,premiumPrices){
-    return rateFor(grade(project,record),prices,project,record,premiumPrices);
+    return rateOf(prices,project,record,premiumPrices);
   }
   /** 金额统一到分：按集单价可能带角分（如 78.888），落账前必须收敛为两位小数。
       先修正二进制浮点误差再四舍五入，避免 1.005 这类值被判成 1.00。 */
@@ -91,10 +102,23 @@
     const scaled=Number((value*100).toFixed(6));
     return Math.round(scaled)/100;
   }
+  /** 该记录实际用的单价：优先记录内快照（S2-2.10，改单价不动历史），
+      快照等级与当前等级不一致（人工纠正过等级）时才回到现价。 */
+  function rateOf(prices,project,record,premiumPrices){
+    const level=grade(project,record);
+    if(level==null)return null;
+    const snapshot=record&&record.rateSnapshot;
+    if(snapshot&&snapshot.level===level&&Number.isFinite(snapshot.per_min)&&Number.isFinite(snapshot.per_ep)){
+      return {per_min:snapshot.per_min,per_ep:snapshot.per_ep};
+    }
+    return rateFor(level,prices,project,record,premiumPrices);
+  }
   function fee(prices,project,record,premiumPrices){
     if(!isBillable(record))return 0;
-    const rate=rateFor(grade(project,record),prices,project,record,premiumPrices);
+    // 待定级（导入时未定等级且项目也没有默认等级）：不猜价，计 0 并由界面显式提示「N 条待定级」。
+    if(grade(project,record)==null)return 0;
+    const rate=rateOf(prices,project,record,premiumPrices);
     return round2((record.mode||project.mode)==='按集'?rate.per_ep:durationSeconds(record.duration)/60*rate.per_min);
   }
-  scope.SettlementBilling=Object.freeze({workType,isBillable,exclusionReason,EXCLUSION_REASONS,durationSeconds,fee,price,grade,rangeLevel,fallbackLevel,unmatched,usesStaircase,episodeNumberOf,parseRanges,defaultRanges,defaultPremiumPrices});
+  scope.SettlementBilling=Object.freeze({workType,isBillable,exclusionReason,EXCLUSION_REASONS,durationSeconds,fee,price,rateOf,grade,needsGrade,rangeLevel,fallbackLevel,unmatched,usesStaircase,episodeNumberOf,parseRanges,defaultRanges,defaultPremiumPrices});
 })(globalThis);

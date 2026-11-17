@@ -8,7 +8,7 @@ const ROOT = process.env.SETTLEMENT_WEB_ROOT || 'D:/Ai-Files/Repos/settlement-to
 const SOURCE = fs.readFileSync(path.join(ROOT, 'assets/desktop-workspace.js'), 'utf8');
 
 function boot(initial = {}, opts = {}) {
-  const server = { storage: { ...initial }, revision: Object.keys(initial).length ? 7 : 0, writes: [], blobs: opts.blobs || {} };
+  const server = { storage: { ...initial }, revision: Object.keys(initial).length ? 7 : 0, writes: [], blobs: opts.blobs || {}, conflictOnce: !!opts.conflictOnce, lastChange: opts.lastChange || null, previous: opts.previous || null };
   class XHR {
     constructor() { this.status = 0; this.responseText = ''; this.headers = {}; }
     open(method, url) { this.method = method; this.url = url; }
@@ -18,7 +18,13 @@ function boot(initial = {}, opts = {}) {
       server.writes.push({ method: this.method, url: this.url, payload });
       if (this.method === 'GET' && this.url === '/__workspace__') {
         this.status = 200;
-        this.responseText = JSON.stringify({ formatVersion: 1, app: 'settlement-workbench', revision: server.revision, storage: server.storage, path: 'C:/x/workspace.json' });
+        this.responseText = JSON.stringify({ formatVersion: 1, app: 'settlement-workbench', revision: server.revision, storage: server.storage, path: 'C:/x/workspace.json', lastChange: server.lastChange || null, capabilities: ['patch'] });
+        return;
+      }
+      if (this.method === 'GET' && this.url === '/__workspace_previous__') {
+        if (!server.previous) { this.status = 404; this.responseText = '{"error":"没有可用的上一版本"}'; return; }
+        this.status = 200;
+        this.responseText = JSON.stringify({ revision: server.revision - 1, storage: server.previous });
         return;
       }
       if (this.method === 'GET' && this.url.startsWith('/__upgrade_blob__')) {
@@ -27,6 +33,15 @@ function boot(initial = {}, opts = {}) {
         this.status = 200; this.responseText = server.blobs[name]; return;
       }
       if (this.method === 'POST' && this.url === '/__workspace__') {
+        if (server.conflictOnce) {
+          // 模拟另一个窗口先写了一步：磁盘版本号变了，回执带 conflict 标记（S2-2.8）
+          server.conflictOnce = false;
+          server.conflicts = (server.conflicts || 0) + 1;
+          server.revision += 1;
+          this.status = 409;
+          this.responseText = JSON.stringify({ error: '另一个窗口已更新工作区，请关闭其他窗口并重新打开', conflict: 'revision', revision: server.revision, capabilities: ['patch'] });
+          return;
+        }
         if (payload.storage) { server.storage = { ...payload.storage }; }
         else { for (const [k, v] of Object.entries(payload.patch)) { if (v === null) delete server.storage[k]; else server.storage[k] = v; } }
         server.revision += 1;
@@ -131,6 +146,30 @@ const ok = (name) => { pass++; console.log('  ok  ' + name); };
     assert.equal(cache.getItem('some-ui-flag'), '1');
     assert.equal(server.storage['some-ui-flag'], undefined);
     ok('未托管键不进入工作区文件');
+  }
+
+  // 2.8 版本冲突自动重放：另一个窗口先写过，这次改动重载后重放成功，不再让用户重开
+  {
+    const { ctx, server } = boot({ settlement_v1: 'old' }, { conflictOnce: true });
+    ctx.workspaceStorage.setItem('settlement_v1', 'new-ledger');
+    assert.equal(server.conflicts, 1, '应触发一次 409 冲突');
+    assert.equal(server.storage.settlement_v1, 'new-ledger', '重放后账本必须落盘');
+    assert.equal(ctx.workspaceStorage.getItem('settlement_v1'), 'new-ledger', '内存副本要跟着重载后的服务端状态');
+    assert.equal(ctx.desktopWorkspace.error, undefined, '自动重放成功不应进入暂停保存状态');
+    ok('409 冲突 → 重载磁盘版本后重放一次，改动不丢、不弹重开提示');
+  }
+
+  // 2.9 重启后一次撤销：开机把「上一次变更之前」的账本取到内存，用掉后日志删除
+  {
+    const previous = { settlement_v1: '{"projects":[]}', 'settlement-theme': 'dark' };
+    const { ctx, server } = boot({ settlement_v1: '{"projects":[{"name":"A"}]}' },
+      { lastChange: { revision: 7, label: '导入', updatedAt: '2026-11-17T10:00:00Z' }, previous });
+    assert.equal(ctx.desktopWorkspace.restartUndo.label, '导入', '开机应带回可撤销的上次变更');
+    assert.equal(ctx.desktopWorkspace.restartUndo.storage.settlement_v1, '{"projects":[]}', '要拿到上一个版本的账本原文');
+    ctx.desktopWorkspace.consumeRestartUndo();
+    assert.equal(ctx.desktopWorkspace.restartUndo, null, '用掉之后本会话不再提供');
+    assert.ok(server.writes.some(w => w.payload && w.payload.action === 'consume-last-change'), '要通知服务端删日志，避免下次再撤一次');
+    ok('重启后一次撤销：取上一版本原文 → 用掉即删日志');
   }
 
   console.log('desktop 适配器 ' + pass + ' 组断言通过');

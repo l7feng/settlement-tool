@@ -43,6 +43,25 @@ class PatchTests(unittest.TestCase):
             self.store.patch(0, {'settlement-theme': 'warm'})
         self.assertEqual(self.store.read()['storage'], self.values)
 
+    def test_stale_revision_carries_current_revision(self):
+        """S2-2.8：冲突要带磁盘上的真实版本号，前端才能重载后重放这次改动。"""
+        from workspace_store import RevisionConflict
+        self.store.save(0, self.values)
+        with self.assertRaises(RevisionConflict) as raised:
+            self.store.patch(0, {'settlement-theme': 'warm'})
+        self.assertEqual(raised.exception.revision, 1)
+        # 重放：用新版本号提交同一份 patch，必须成功且只落这一处
+        saved = self.store.patch(raised.exception.revision, {'settlement-theme': 'warm'})
+        self.assertEqual(saved['revision'], 2)
+        self.assertEqual(self.store.read()['storage']['settlement-theme'], 'warm')
+
+    def test_capabilities_advertised(self):
+        """S2-2.8：服务端要声明支持增量与冲突重放，前端据此不再猜 exe 版本。"""
+        source = (Path(__file__).resolve().parents[1] / 'src' / 'desktop_app.py').read_text(encoding='utf-8')
+        self.assertIn("CAPABILITIES = ['patch', 'revision-conflict-retry']", source)
+        self.assertIn("'conflict': 'revision'", source)
+        self.assertIn("saved['capabilities'] = CAPABILITIES", source)
+
     def test_patch_rejects_unmanaged_key(self):
         self.store.save(0, self.values)
         with self.assertRaisesRegex(ValueError, '工作区字段无效'):

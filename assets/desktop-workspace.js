@@ -22,7 +22,7 @@
     if (xhr.status !== 200) throw new Error('快照原文读取失败');
     return xhr.responseText;
   };
-  let values = {}, revision = 0, failure = null, notified = false;
+  let values = {}, revision = 0, failure = null, notified = false, capabilities = [];
   function request(method, path, payload) {
     const xhr = new XMLHttpRequest();
     xhr.open(method, path, false);
@@ -31,8 +31,22 @@
     xhr.send(payload ? JSON.stringify(payload) : null);
     let result;
     try { result = JSON.parse(xhr.responseText); } catch (_) { throw new Error('工作区服务没有返回有效结果'); }
-    if (xhr.status !== 200) throw new Error(result.error || '工作区保存失败');
+    if (xhr.status !== 200) {
+      const error = new Error(result.error || '工作区保存失败');
+      error.status = xhr.status;
+      error.body = result || {};
+      throw error;
+    }
+    if (Array.isArray(result.capabilities)) capabilities = result.capabilities;
     return result;
+  }
+  // S2-2.8：另一个窗口先写了一步，磁盘版本号变了。不再甩一句「请关闭其他窗口」让用户重开：
+  // 重新读取磁盘上的最新整份数据，再把这次改动重放一次；重放仍失败才算真失败。
+  function reloadFromDisk() {
+    const current = request('GET','/__workspace__',null);
+    revision = current.revision;
+    values = current.storage || {};
+    return current;
   }
   function fail(error) {
     failure = error;
@@ -47,29 +61,47 @@
   // 但 415KB 全量请求变成几十字节，界面不再被序列化+传输拖住。
   function commitFull(next) {
     if (failure) throw failure;
-    try {
-      const saved = request('POST','/__workspace__',{revision,storage:next});
-      revision = saved.revision;
-      values = saved.storage;
-    } catch (error) { return fail(error); }
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const saved = request('POST','/__workspace__',{revision,storage:next});
+        revision = saved.revision;
+        values = saved.storage;
+        return;
+      } catch (error) {
+        if (attempt === 0 && error.body && error.body.conflict === 'revision') {
+          try { reloadFromDisk(); } catch (reloadError) { return fail(reloadError); }
+          continue;   // 版本对上了，再写一次
+        }
+        return fail(error);
+      }
+    }
+  }
+  function applyChanges(changes) {
+    const next = {...values};
+    for (const [key, value] of Object.entries(changes)) { if (value === null) delete next[key]; else next[key] = value; }
+    return next;
   }
   function commit(changes) {
     if (failure) throw failure;
-    try {
-      const saved = request('POST','/__workspace__',{revision,patch:changes});
-      revision = saved.revision;
-      // 服务端只回执版本号（不回传 400KB 全文），本地按本次变更合并内存副本。
-      const next = {...values};
-      for (const [key, value] of Object.entries(changes)) { if (value === null) delete next[key]; else next[key] = value; }
-      values = next;
-    } catch (error) {
-      // 旧版 exe 只认全量 storage：识别到格式不匹配就退回整份提交，不丢这次修改。
-      if (/'storage'|增量写入|格式无效/.test(error.message||'')) {
-        const next = {...values};
-        for (const [key, value] of Object.entries(changes)) { if (value === null) delete next[key]; else next[key] = value; }
-        return commitFull(next);
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const saved = request('POST','/__workspace__',{revision,patch:changes});
+        revision = saved.revision;
+        // 服务端只回执版本号（不回传全文），本地按本次变更合并内存副本。
+        values = applyChanges(changes);
+        return;
+      } catch (error) {
+        const conflict = error.body && error.body.conflict === 'revision';
+        if (attempt === 0 && conflict) {
+          try { reloadFromDisk(); } catch (reloadError) { return fail(reloadError); }
+          continue;
+        }
+        // 旧版 exe 只认全量 storage：识别到格式不匹配就退回整份提交，不丢这次修改。
+        if (/'storage'|增量写入|格式无效/.test(error.message||'')) {
+          return commitFull(applyChanges(changes));
+        }
+        return fail(error);
       }
-      return fail(error);
     }
   }
   // ── 设置类写入合并（1.3）───────────────────────────────────────────────
@@ -120,6 +152,11 @@
     },
     flush:flushPending
   };
+  // S2-2.9：撤销用掉后就把日志删掉——同一份状态不会在下次启动时又被撤销一遍。
+  window.desktopWorkspace.consumeRestartUndo=function(){
+    try { request('POST','/__workspace__',{action:'consume-last-change'}); } catch (_) {}
+    window.desktopWorkspace.restartUndo=null;
+  };
   // 关窗/切后台前把待写设置补落一次，缩短「合并窗口内崩溃」的丢失面。
   window.addEventListener('pagehide', flushPending);
   document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') flushPending(); });
@@ -146,6 +183,14 @@
     }
     window.desktopWorkspace.enabled=true;
     window.desktopWorkspace.path=saved.path;
+    // S2-2.9：上次退出前的最后一次变更，重启后还能撤销一次。这里只把「上一个版本」的
+    // 整份内容取到内存，真正落账仍走正常撤销路径（照常写新版本、留快照）。
+    if(saved.lastChange && !failure){
+      try{
+        const previous=request('GET','/__workspace_previous__');
+        window.desktopWorkspace.restartUndo={label:saved.lastChange.label||'变更',at:saved.lastChange.updatedAt||'',storage:previous.storage,revision:previous.revision};
+      }catch(_){ window.desktopWorkspace.restartUndo=null; }
+    }
   } catch(error) {
     // Read-only legacy data remains available; never seed defaults over a damaged file.
     values={};try { Object.assign(values,cacheValues()); } catch (_) {}

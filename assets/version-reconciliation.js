@@ -1,5 +1,6 @@
 /* Formal deliveries: versioned replacements retain earlier work without double billing. */
-function formalSourceVersion(record){const name=String(record.sourceFile||record.sourcePath||'').replace(/\\/g,'/').split('/').at(-1);return Number(name.match(/(?:^|[^a-z0-9])v(\d+)(?=$|[^0-9])/i)?.[1]||0);}
+// 版本号解析统一走 SettlementRevision（S2-2.1），此处只保留取文件名与转整数的语义。
+function formalSourceVersion(record){return SettlementRevision.versionOf(record.sourceFile||record.sourcePath||'');}
 function formalEpisode(key,r){const v=r?.episodeNo;if(v!=null&&/^\d+$/.test(String(v)))return String(Number(v));return /^\d+$/.test(String(key))?String(Number(key)):null;}
 function formalDefaultAction(row,config,project){
  const key=importStorageKey(row,config);if(!project)return 'add';
@@ -43,10 +44,27 @@ function expandFormalVersionRows(rows,config,project){
  if(config.type!=='正式')return rows;
  return rows.flatMap(row=>{
   const versions=new Map();
+  // D1（S2-2.5）：同一版本号 + 不同日期 = 版本号填错，不是两次交付。导入前就拦住，
+  // 不让它变成第二条计费记录；提示里点名文件名，方便直接改版号。
+  const datesByVersion=new Map();
   for(const c of row.candidates){
    const version=formalSourceVersion({sourceFile:c.file.name});
    if(c.role==='分轨'||!version)continue;
-   // 同一次交付 = 同版本号 + 同日期；同版本号不同日期是两次交付，必须分别保留。
+   const date=c.mmdd||c.fullDate||'';
+   if(!datesByVersion.has(version))datesByVersion.set(version,new Map());
+   const seen=datesByVersion.get(version);
+   if(!seen.has(date))seen.set(date,c.file.name);
+  }
+  for(const [version,dates] of datesByVersion){
+   if(dates.size<2)continue;
+   const label=Number(row.episodeNo)?('第'+Number(row.episodeNo)+'集'):'本批';
+   throw Error(label+'版本号 V'+String(version).padStart(2,'0')+' 出现在不同日期（'+[...dates.values()].join('、')+'）。'
+     +'同版本不同日期一定是版本号填错，请把后交付的那个改成新版本号再导入。');
+  }
+  for(const c of row.candidates){
+   const version=formalSourceVersion({sourceFile:c.file.name});
+   if(c.role==='分轨'||!version)continue;
+   // 同一次交付 = 同版本号 + 同日期
    const gkey=version+'|'+(c.mmdd||c.fullDate||'');
    if(!versions.has(gkey))versions.set(gkey,[]);
    versions.get(gkey).push(c);
@@ -67,19 +85,65 @@ function expandFormalVersionRows(rows,config,project){
  });
 }
 function reconcileFormalVersions(next){
- for(const p of next.projects){const old=state.data.projects.find(q=>q.id===p.id)||{episodes:{}};const affected=new Set();
-  for(const [key,r] of Object.entries(p.episodes)){const before=Object.values(old.episodes).find(e=>e.recordId===r.recordId);if((r.type||p.type)==='正式'&&formalEpisode(key,r)&&formalSourceVersion(r)>0&&(!before||r.sourceFile!==before.sourceFile))affected.add(JSON.stringify([formalEpisode(key,r),workTypeOf(r)]));}
-  const remaining=new Set(Object.values(p.episodes).map(r=>r.recordId));for(const [key,r]of Object.entries(old.episodes))if(!remaining.has(r.recordId)&&(r.type||old.type)==='正式'&&formalEpisode(key,r)&&formalSourceVersion(r)>0)affected.add(JSON.stringify([formalEpisode(key,r),workTypeOf(r)]));
-  for(const identity of affected){const rows=Object.entries(p.episodes).filter(([key,r])=>(r.type||p.type)==='正式'&&JSON.stringify([formalEpisode(key,r),workTypeOf(r)])===identity&&formalSourceVersion(r)>0&&workTypeOf(r)!=='修改'&&(!r.excluded&&r.billable!==false||r.versionSuperseded)).map(([,r])=>r);
-   rows.sort((a,b)=>formalSourceVersion(a)-formalSourceVersion(b)||a.date.localeCompare(b.date));
-   if(rows.length>1&&formalSourceVersion(rows.at(-1))===formalSourceVersion(rows.at(-2))&&rows.at(-1).date===rows.at(-2).date)throw Error(p.name+'同集最高版本有多个相同日期文件，请先选定一个');
-   for(const r of rows)if(r===rows.at(-1)){if(r.versionSuperseded){delete r.versionSuperseded;r.excluded=false;r.excludeReason='';}}else{r.versionSuperseded=true;r.excluded=true;r.excludeReason='旧交付版本（仅最高版本计费）';}
+ // 唯一实现（S2-2.3）：全量、幂等、与「哪来的改动」无关。
+ // 旧实现只看「导入/删除 标签 + 与 state.data 的差异」，导致编辑/纠正/恢复/重命名后旧版标记不更新；
+ // 现在每次都按当前数据重算一遍：同一输入两次调用结果完全相同。
+ for(const p of next.projects){
+  if((p.type)==='Demo'&&p.demoBucket)continue;
+  const groups=new Map();
+  for(const [key,r] of Object.entries(p.episodes||{})){
+   if((r.type||p.type)==='Demo')continue;
+   const ep=formalEpisode(key,r),wt=workTypeOf(r),v=formalSourceVersion(r);
+   if(ep==null||wt==='修改'||!v)continue;
+   const g=ep+'|'+wt;if(!groups.has(g))groups.set(g,[]);groups.get(g).push({key,r,v});
+  }
+  for(const items of groups.values()){
+   if(items.length<2)continue;
+   items.sort((a,b)=>a.v-b.v||String(a.r.date||'').localeCompare(String(b.r.date||''))||String(a.key).localeCompare(String(b.key)));
+   // D1（S2-2.5）：同一个版本号出现在两个不同日期 → 一定是版本号填错（忘了升版），
+   // 但不是两次交付的钱。存量数据不静默计费也不静默置零：标待核对并写明冲突，由人改版本号。
+   const datesByVersion=new Map();
+   for(const it of items){const d=String(it.r.date||'');if(!datesByVersion.has(it.v))datesByVersion.set(it.v,new Set());datesByVersion.get(it.v).add(d);}
+   let sameVersionDifferentDate=null;
+   for(const [v,dates] of datesByVersion)if(dates.size>1)sameVersionDifferentDate=v;
+   if(sameVersionDifferentDate!=null){
+    for(const it of items)if(it.v===sameVersionDifferentDate){it.r.needsReview=true;it.r.versionConflict='V'+String(sameVersionDifferentDate).padStart(2,'0')+' 出现在不同日期';}
+    continue;
+   }
+   const top=items.at(-1),second=items.at(-2);
+   // 同版本 + 同日期 → 两条来源无法区分谁是最新，不猜也不报错阻塞保存：标待核对，由人在明细里选定。
+   if(top.v===second.v&&String(top.r.date||'')===String(second.r.date||'')){
+    for(const it of items){it.r.needsReview=true;it.r.versionConflict=true;}
+    continue;
+   }
+   for(const it of items){
+    const r=it.r;
+    delete r.versionConflict;
+    if(it===top){
+     if(r.versionSuperseded){delete r.versionSuperseded;
+      // 只有「规则自己置的零」才跟着撤销；人工置零保持不变（D3：谁最后改谁生效）。
+      SettlementExclusion.clearAuto(r);}
+    }else{
+     r.versionSuperseded=true;
+     // 人工已经表过态的记录，规则不再改它的 excluded，只在明细里显示「旧版本 / 人工覆盖」。
+     if(!r.excludeManual)SettlementExclusion.setAuto(r,true,'旧交付版本（仅最高版本计费）');
+    }
+   }
   }
  }
  return next;
 }
 const versionOriginalCommit=commitDataChange;commitDataChange=function(next,label,preferences=null){
- try{if(label.includes('导入')||label.includes('删除')){next=reconcileFormalVersions(normalizeData(next));if(label.includes('删除')){const remaining=new Set(next.projects.flatMap(p=>Object.values(p.episodes).map(r=>r.recordId))),removed=[];for(const p of state.data.projects)for(const [epNo,r]of Object.entries(p.episodes))if(!remaining.has(r.recordId)&&(r.type||p.type)==='Demo')removed.push({projName:p.name,epNo});if(removed.length)refreshAffectedDemos(next,removed);}}return versionOriginalCommit(next,label,preferences);}catch(error){toast(error.message);return false;}
+ // S2-2.3：不再按「导入/删除」标签路由——任何一次落账都无条件跑一遍幂等 reconcile，
+ // 这样编辑、纠正、恢复、重命名之后旧版标记也跟得上；删除时另外补偿受影响的 Demo 分组。
+ try{
+  // normalizeData 内部已跑唯一 reconcile（S2-2.3），这里只补删除时的 Demo 分组补偿。
+  next=normalizeData(next);
+  if(label.includes('删除')){const remaining=new Set(next.projects.flatMap(p=>Object.values(p.episodes).map(r=>r.recordId))),removed=[];
+   for(const p of state.data.projects)for(const [epNo,r]of Object.entries(p.episodes))if(!remaining.has(r.recordId)&&(r.type||p.type)==='Demo')removed.push({projName:p.name,epNo});
+   if(removed.length)refreshAffectedDemos(next,removed);}
+  return versionOriginalCommit(next,label,preferences);
+ }catch(error){toast(error.message);return false;}
 };
 function formalPreviewTotals(groups){
  const next=normalizeData(state.data),refs=new Map();let index=0;
