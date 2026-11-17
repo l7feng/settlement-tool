@@ -948,7 +948,11 @@ body #topCards > .card #amountControls{position:absolute;right:9px;bottom:6px;he
 body #topCards > .card #amountControls button{height:20px;padding:0 5px;font-size:10px;min-width:0;border-radius:6px}
 body #topCards > .card #amountControls svg{width:13px;height:13px}
 body #topCards > .card #lifetimeFee{padding-right:70px}
-</style>
+
+.nav-group{margin-top:2px}
+.nav-group .nav-cap{margin:6px 0 3px}
+.nav-group button{display:block;width:100%;margin:0 0 4px;text-align:left}
+.nav-group .nav-cap{margin:8px 0 4px}</style>
 </head>
 <body>
 
@@ -1559,7 +1563,7 @@ function initLayoutV2(){
   if(window.__layoutV2)return;window.__layoutV2=true;
   const bar=document.getElementById('filterBar'),body=document.getElementById('rightFilterBody');
   if(!bar||!body)return;
-  const lowIds=['typeFilter','workFilter','modeFilter','dateStart','dateEnd'];
+  const lowIds=['typeFilter','workFilter','modeFilter','dateStart','dateEnd','versionFilter','durationFilter'];
   const lows=lowIds.map(id=>document.getElementById(id)?.closest('.filter-field')).filter(Boolean);
   const clearBtn=bar.querySelector('button[onclick*="clearRecordFilters"]');
   const demoBtn=bar.querySelector('button[onclick*="quickFilterType"]');
@@ -1578,7 +1582,17 @@ function initLayoutV2(){
     body.appendChild(foot);
   }
   const nav=document.getElementById('leftNavBody');
-  if(nav&&!nav.querySelector('.nav-cap')){const cap=document.createElement('div');cap.className='nav-cap';cap.textContent='视图';nav.prepend(cap);}
+  if(nav&&!nav.querySelector('.nav-cap')){
+    const cap=document.createElement('div');cap.className='nav-cap';cap.textContent='视图';nav.prepend(cap);
+    const mk=t=>{const d=document.createElement('div');d.className='nav-group';const c=document.createElement('div');c.className='nav-cap';c.textContent=t;d.appendChild(c);nav.appendChild(d);return d;};
+    const daily=mk('日常'),audit=mk('核对'),care=mk('维护');
+    const acts=[...nav.querySelectorAll('button')].filter(b=>!b.dataset.view);
+    acts.forEach(b=>{const t=b.textContent.trim();
+      if(/登记|项目与价格|结算对/.test(t))daily.appendChild(b);
+      else if(/校准来源|批量编辑/.test(t))audit.appendChild(b);
+      else if(/备份|检查重复/.test(t))care.appendChild(b);});
+    [...nav.querySelectorAll('.nav-group')].forEach(g=>{if(g.children.length<2)g.remove();});
+  }
   updateFilterChips();updateFilterFoot();
 }
 
