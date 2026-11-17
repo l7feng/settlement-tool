@@ -350,6 +350,31 @@ def find_visible_window(title_sub):
     return hits[0] if hits else 0
 
 
+def activate_existing_instance():
+    """4.7：已有同目录实例在跑时，把它的窗口拉到前台而不是再开一个。
+
+    返回 True 表示「已切换到旧窗口，本次启动应当退出」。
+    """
+    hwnd = find_visible_window(APP_NAME)
+    if not hwnd:
+        return False
+    try:
+        user32 = ctypes.windll.user32
+        user32.ShowWindow(hwnd, 9)            # SW_RESTORE
+        user32.SetForegroundWindow(hwnd)
+        log('[single-instance] 已发现运行中的窗口，切换到旧实例（不再开第二个）')
+        try:
+            user32.MessageBoxW(None, '制作结算台已经在运行，已为你切换到那个窗口。\n'
+                                     '如果要开新窗口，请先关闭旧窗口。',
+                               APP_NAME, 0x00000040)   # MB_ICONINFORMATION
+        except Exception:
+            pass
+        return True
+    except Exception as error:
+        log('[single-instance] 激活旧实例失败: %s' % error)
+        return False
+
+
 def distinct_colors(title_sub):
     """PrintWindow 截窗口，**裁到客户区**后统计颜色多样性。
 
@@ -416,7 +441,15 @@ def distinct_colors(title_sub):
 
 
 def _probe_pywebview(window, state):
-    """子线程：等页面加载完再探针，失败就销毁窗口（webview.start 会随之返回）。"""
+    """子线程：优先等页面主动握手（pageReady），8 s 收不到才回落到像素探针。"""
+    ready = state.get('ready')
+    if ready is not None:
+        if ready.wait(8):
+            state['ok'] = True
+            state['phase'] = 'handshake'
+            log('[probe] 收到 pageReady 握手（< 8 s）→ 正常，跳过像素探针')
+            return
+        log('[probe] 8 s 内未收到 pageReady，回落到像素探针')
     try:
         window.events.loaded.wait(15)
     except Exception:
@@ -424,6 +457,7 @@ def _probe_pywebview(window, state):
     time.sleep(3)                  # 给首帧渲染留时间
     n, ratio = distinct_colors(APP_NAME)
     state['colors'] = n
+    state['phase'] = 'pixel'
     state['ok'] = (n >= MIN_DISTINCT_COLORS) and (ratio <= MAX_TOP_RATIO)
     log('[probe] 客户区颜色种类 = %s，最主色占比 %.0f%% → %s'
           % (n, ratio * 100, '正常' if state['ok'] else '未渲染（黑屏/白屏/纯底色）'))
@@ -446,6 +480,13 @@ class Api(object):
 
     def app_info(self):
         return {'version': VERSION, 'dataDir': data_dir(), 'mode': 'pywebview'}
+
+    def pageReady(self):
+        """4.6：页面首帧后主动报到；判定从「猜像素」变成「问页面」。"""
+        event = getattr(self, 'ready_event', None)
+        if event is not None:
+            event.set()
+        return {'ok': True}
 
     def open_data_folder(self):
         path = data_dir()
@@ -523,6 +564,8 @@ class Api(object):
 def run_pywebview(url):
     """跑 pywebview；返回 True＝用户正常使用（渲染通过或窗口被手动关闭）。"""
     api = Api()
+    ready_event = threading.Event()
+    api.ready_event = ready_event
     window = webview.create_window(
         '%s  v%s' % (APP_NAME, VERSION),
         url=url,
@@ -533,7 +576,7 @@ def run_pywebview(url):
         background_color='#EDF2F2',
         text_select=True,
     )
-    state = {}
+    state = {'ready': ready_event}
     threading.Thread(target=_probe_pywebview, args=(window, state), daemon=True).start()
 
     storage = os.path.join(data_dir(), 'webview-data')
@@ -616,6 +659,9 @@ def main():
         return 1
     url = page_url(port)
     log('[server] %s' % url)
+
+    if activate_existing_instance():
+        return 0
 
     if run_pywebview(url):
         return 0

@@ -3892,6 +3892,19 @@ document.getElementById('modalBox').addEventListener('pointerdown',event=>{
 applySideWidths();
 
 render();
+/* 4.6 启动握手：首帧后主动报到，后端据此跳过早帧像素探针（收不到才回落到探针） */
+(function () {
+  let sent = false;
+  function signal() {
+    if (sent) return;
+    const api = window.pywebview && window.pywebview.api;
+    if (!api || typeof api.pageReady !== 'function') return;
+    sent = true;
+    try { api.pageReady(); } catch (e) {}
+  }
+  requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(signal, 0)));
+  window.addEventListener('pywebviewready', () => setTimeout(signal, 0));
+})();
 </script>
 <script src="assets/record-maintenance.js"></script>
 <script src="assets/gui-layout.js"></script>

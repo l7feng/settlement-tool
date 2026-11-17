@@ -4,6 +4,8 @@
 
 | 日期 | 提交 | 说明 |
 | --- | --- | --- |
+| 2026-11-17 | s4(4.6) | **启动握手替代像素探针**：页面在首帧后（双 `requestAnimationFrame`）调用 `pywebview.api.pageReady()`，同时监听 `pywebviewready` 兜住注入时序；后端 `_probe_pywebview` 先 `ready.wait(8)`，收到即判正常并写 `phase='handshake'` 直接返回，收不到才回落旧路径（等 loaded + sleep 3 + 客户区取色）并写 `phase='pixel'`。正常机器不再固定空等 3 s，判定由「猜像素」变「问页面」，日志能看出走的是哪条 |
+| 2026-11-17 | s4(4.7) | **旧实例提示**：`main()` 在创建窗口前先 `activate_existing_instance()`——按标题找到已在运行的同名窗口，`ShowWindow(SW_RESTORE)` + `SetForegroundWindow` 拉到前台，弹一句「已经在运行，已为你切换」后本次启动直接退出，不再开第二个窗口共用同一账本（过去要靠 revision 冲突才发现）。新增 `tests/test_startup_handshake.py` 7/7（含握手直接短路探针的行为测试） |
 | 2026-11-17 | s4(4.2) | **死代码清理（按引用复核后的子集）**：计划列的 10 个函数里有 5 个确实零引用（`toggleDelMode` / `addBatchImportGroup` / `pickBatchImportFiles` / `resetTopLayoutFields` / `saveTopLayout`），已删；另 5 个仍在用，未动——`applyViewPreset`、`toggleSidePanel` 是布局与视图真代码（UI 测试 9/12 处在调），`openReview` 被截图段与测试调用，`applyBatchWorkChanges` 被多项目导入与测试调用，`projEpsFiltered` 被筛选链调用。删除后 grep 零命中，UI 93/93 仍全绿 |
 | 2026-11-17 | s4(4.8) | **服务端最小断言**：`WorkspaceStore.validate()` 与 `patch()` 现在对业务账本（`settlement_v1` 及各 `settlement_v1_profile_*`）做结构校验——必须是合法 JSON、顶层对象、`projects` 数组、项目对象、记录对象、项目数 ≤ 500、记录数 ≤ 20000，失败时抛带键名与字段名的 `ValueError` 且不落盘（原文件字节不变）；`settlement_recovery_v2` 类只要求可解析为对象。`preserve_legacy()` 走 lenient 模式（迁移来的坏账本仍原样留存）。新增 `tests/test_ledger_validate.py` 8/8；用现役账本副本（rev 661、8 个键、5.96 MB）实跑通过，不会把真实数据拦在门外 |
 | 2026-11-17 | s4(4.4) | **xlsx 懒加载**：删掉启动即加载的 `<script src="assets/xlsx.full.min.js">` 与 `document.write` + `cdn.jsdelivr.net` 兜底（原兜底会在断网时静默失败且文案误导）；新增 `ensureXlsx()`，首次点导出才注入本地 `assets/xlsx.full.min.js`，缺文件时报「请用完整发布包重新安装，本工具不需要联网」。启动不再解析 881 KB |
