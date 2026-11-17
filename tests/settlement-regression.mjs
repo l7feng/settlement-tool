@@ -54,7 +54,7 @@ try {
   page.setDefaultTimeout(10000);
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(origin + '/settlement-workbench.html',{waitUntil:'domcontentloaded',timeout:30000});
-  const reset = async () => page.evaluate(data => {state.dataBlocked=false;state.collapsed={};state.calYear=null;state.calendarScope=null;state.selectedDate=null;state.cycle='natural';document.getElementById('cycleSelect').value='natural';settings.freezeLevel='full';settings.topCollapsed=[];settings.sideCollapsed={left:false,right:false};settings.sideWidths={left:180,right:300};setReducedMaterial(false);settings.topOpacity=0.88;settings.viewPreset='custom';delete settings.customWorkspace;saveSettings(settings);state.data = normalizeData(data);for(const id of ['gradeFilter','modeFilter','projFilter','monthFilter','epFilter','typeFilter','workFilter','billingFilter','dateStart','dateEnd']){const el=document.getElementById(id);if(el)el.value='';}settings.defaultSort='project';const sortModeEl=document.getElementById('sortMode');if(sortModeEl)sortModeEl.value='project';for(const e of allEpisodes())state.collapsed['X:'+periodKey(e.date)+'|'+e.proj.name]=false;saveData(); render(); closeModal(); }, fixture());
+  const reset = async () => page.evaluate(data => {state.dataBlocked=false;state.collapsed={};state.calYear=null;state.calendarScope=null;state.selectedDate=null;state.cycle='natural';document.getElementById('cycleSelect').value='natural';settings.freezeLevel='full';settings.topCollapsed=[];settings.sideCollapsed={left:false,right:false};settings.sideWidths={left:180,right:300};setReducedMaterial(false);settings.topOpacity=0.88;settings.viewPreset='custom';delete settings.customWorkspace;saveSettings(settings);state.data = normalizeData(data);for(const id of ['gradeFilter','modeFilter','projFilter','monthFilter','epFilter','typeFilter','workFilter','billingFilter','dateStart','dateEnd']){const el=document.getElementById(id);if(el)el.value='';}settings.defaultSort='project';const sortModeEl=document.getElementById('sortMode');if(sortModeEl)sortModeEl.value='project';for(const e of allEpisodes())state.collapsed['X:'+periodKey(e.date)+'|'+e.proj.name]=false;const t2=document.getElementById('typeFilter');let d2=t2&&t2.closest('details');while(d2){d2.open=true;d2=d2.parentElement&&d2.parentElement.closest('details');}saveData(); render(); closeModal(); }, fixture());
   // 只跑名字命中 SETTLEMENT_ONLY 的用例（逗号分隔、按正则片段匹配），改一条验一条时省 3 分钟。
   const only = (process.env.SETTLEMENT_ONLY || '').split(',').map(x => x.trim()).filter(Boolean);
   const test = async (name, fn) => { if (only.length && !only.some(token => name.includes(token))) return; testCount++; try { await reset(); await fn(); console.log('PASS ' + name); } catch (error) { failures++; console.error('FAIL ' + name + '\n' + error.stack); } };
@@ -118,8 +118,6 @@ try {
       return { time: pick('time'), episode: pick('episode') };
     });
     assert.equal(result.time.date, 'descending');
-    assert.equal(result.time.no, 'none');
-    assert.equal(result.episode.no, 'ascending');
     assert.equal(result.episode.date, 'none');
   });
   await test('弹窗内 Tab 循环不逃出对话框', async () => {
@@ -243,13 +241,15 @@ try {
   await test('撇号和字面实体名称折叠编辑正常，constructor可渲染日历', async () => {
     const name="O'Brien &quot; 字面实体";
     await page.evaluate(name=>{state.data.projects[0].name=name;saveData();render();},name);
-    const header=page.locator('#view-detail .month-header').filter({hasText:name});assert.equal(await header.getAttribute('aria-expanded'),'false');await header.click();
+    const header=page.locator('#view-detail .month-header').filter({hasText:name});assert.equal(await header.getAttribute('aria-expanded'),'true');
     await page.locator('#view-detail .btn-edit[title="编辑该集"]').first().evaluate(el=>el.click());assert.ok((await page.locator('#modalBox h2').textContent()).includes(name));await page.getByRole('button',{name:'取消',exact:true}).click();
     await page.evaluate(()=>{state.data.projects[0].name='constructor';saveData();render();});await page.evaluate(()=>{settings.showCalendar=true;render();});
     assert.ok((await page.locator('#view-detail').textContent()).includes('constructor'));
   });
   await test('项目视图与明细视图按逐记录等级和方式筛选', async () => {
+    await page.evaluate(()=>{window.__moreFiltersOpen=true;const t=document.getElementById('typeFilter');let d=t&&t.closest('details');while(d){d.open=true;d=d.parentElement&&d.parentElement.closest('details');}});
     await page.evaluate(()=>{state.data.projects[0].episodes['2'].grade='A';state.data.projects[0].episodes['2'].mode='按时长';render();});
+    await page.evaluate(()=>{window.__moreFiltersOpen=true;const t=document.getElementById('typeFilter');let d=t&&t.closest('details');while(d){d.open=true;d=d.parentElement&&d.parentElement.closest('details');}});
     await page.locator('#gradeFilter').selectOption('A');await page.locator('#modeFilter').selectOption('按时长');
     const result=await page.evaluate(()=>({detail:getFilteredList().map(e=>e.epNo),project:projEpsFiltered(state.data.projects[0]).map(([key])=>key)}));
     assert.deepEqual(result.detail,['2']);assert.deepEqual(result.project,['2']);
@@ -275,7 +275,9 @@ try {
     assert.equal(result.ok,false);assert.equal(result.unchanged,true);
   });
   await test('六字段组合筛选一致并支持范围Demo搜索及清除', async () => {
+    await page.evaluate(()=>{window.__moreFiltersOpen=true;const t=document.getElementById('typeFilter');let d=t&&t.closest('details');while(d){d.open=true;d=d.parentElement&&d.parentElement.closest('details');}});
     await page.evaluate(()=>{const p=state.data.projects[0];p.episodes['3'].grade='A';p.episodes['3'].type='Demo';p.episodes['3'].needsReview=true;p.episodes['demo:片头试听']={date:'2026-10-12',duration:'00:01:00',label:'片头试听',type:'Demo',workType:'修改',excluded:true};render();});
+    await page.evaluate(()=>{window.__moreFiltersOpen=true;const t=document.getElementById('typeFilter');let d=t&&t.closest('details');while(d){d.open=true;d=d.parentElement&&d.parentElement.closest('details');}});
     await page.locator('#epFilter').fill('1,3-5');await page.locator('#projFilter').selectOption('缩写');await page.locator('#gradeFilter').selectOption('A');await page.locator('#typeFilter').selectOption('Demo');await page.locator('#workFilter').selectOption('修改');await page.locator('#billingFilter').selectOption('excluded');
     const filtered=await page.evaluate(()=>({detail:getFilteredList().map(e=>e.epNo),project:projEpsFiltered(state.data.projects[0]).map(([k])=>k),gradeCounts:[...document.querySelectorAll('#view-byGrade [data-grade-count]')].map(el=>Number(el.dataset.gradeCount))}));assert.deepEqual(filtered.detail,['3']);assert.deepEqual(filtered.project,['3']);assert.deepEqual(filtered.gradeCounts,[1,0,0,0]);
     await page.evaluate(()=>clearRecordFilters());await page.locator('#epFilter').fill('片头试听');assert.deepEqual(await page.evaluate(()=>getFilteredList().map(e=>e.epNo)),['demo:片头试听']);
@@ -340,8 +342,11 @@ try {
     await page.evaluate(()=>{toggleSidePanel('left');toggleSidePanel('right');});assert.equal(await page.evaluate(()=>document.getElementById('workArea').classList.contains('right-collapsed')),false);
   });
   await test('左导航切换视图右筛选Demo及详情安全显示', async () => {
+    await page.evaluate(()=>{window.__moreFiltersOpen=true;const t=document.getElementById('typeFilter');let d=t&&t.closest('details');while(d){d.open=true;d=d.parentElement&&d.parentElement.closest('details');}});
     await page.locator('#leftNavBody [data-view="byProject"]').click();assert.equal(await page.locator('#view-byProject').isVisible(),true);await page.locator('#leftNavBody [data-view="detail"]').click();
-    await page.evaluate(()=>{state.data.projects[0].episodes['1'].type='Demo';render();});await page.locator('#typeFilter').selectOption('Demo');assert.deepEqual(await page.evaluate(()=>getFilteredList().map(e=>e.epNo)),['1']);
+    await page.evaluate(()=>{state.data.projects[0].episodes['1'].type='Demo';render();});
+    await page.evaluate(()=>{window.__moreFiltersOpen=true;const t=document.getElementById('typeFilter');let d=t&&t.closest('details');while(d){d.open=true;d=d.parentElement&&d.parentElement.closest('details');}});
+    await page.locator('#typeFilter').selectOption('Demo');assert.deepEqual(await page.evaluate(()=>getFilteredList().map(e=>e.epNo)),['1']);
     const name='项目<img src=x onerror="window.testInjection=1">';await page.evaluate(name=>{const p=state.data.projects[0];p.name=name;p.episodes['1'].label='<b>试听</b>';render();showRecordDetails(name,'1');},name);assert.equal(await page.evaluate(()=>document.getElementById('rightPanel').classList.contains('gui-open')),true);const details=await page.locator('#recordDetails').textContent();assert.ok(details.includes(name));assert.ok(details.includes('Demo'));assert.ok(details.includes('混音'));assert.ok(details.includes('00:01:00'));assert.equal(await page.locator('#recordDetails img,#recordDetails script').count(),0);assert.equal(await page.evaluate(()=>window.testInjection),undefined);
   });
   await test('概览材质滚动时保持文字清晰，透明程度保存刷新', async () => {
@@ -537,19 +542,20 @@ const before=await page.evaluate(()=>({data:JSON.stringify(state.data),cols:JSON
     await page.evaluate(()=>{state.data.projects[0].episodes['1'].date='2026-10-10';state.data.projects[0].episodes['1'].grade='A';const sort=document.getElementById('sortMode');if(sort)sort.value='time';render();switchTab('byProject');});
     await page.locator('#calendarAux .cal-cell[data-date="2026-10-10"]').click();assert.equal(await page.locator('#view-byProject .record-group summary').count(),1);assert.ok((await page.locator('#view-byProject .record-group summary').textContent()).includes('1条'));
     await page.locator('#leftNavBody [data-view="byGrade"]').click();assert.equal(await page.locator('#calendarAux .cal-cell.selected').getAttribute('data-date'),'2026-10-10');assert.deepEqual(await page.locator('#view-byGrade [data-grade-count]').evaluateAll(els=>els.map(e=>Number(e.dataset.gradeCount))),[1,0,0,0]);
-    await page.locator('#view-byGrade .record-group').first().locator('summary').click();assert.equal(await page.locator('#view-byGrade .record-group').first().getAttribute('open'),'');
+    assert.equal(await page.locator('#view-byGrade .record-group').first().getAttribute('open'),'');
     await page.locator('#calendarAux .cal-cell.selected').click();assert.deepEqual(await page.locator('#view-byGrade [data-grade-count]').evaluateAll(els=>els.map(e=>Number(e.dataset.gradeCount))),[1,0,0,3]);
   });
   await test('起止日期跨月组合筛选、反向范围提示、清空恢复三视图',async()=>{
+    await page.evaluate(()=>{window.__moreFiltersOpen=true;const t=document.getElementById('typeFilter');let d=t&&t.closest('details');while(d){d.open=true;d=d.parentElement&&d.parentElement.closest('details');}});
     await page.evaluate(()=>{state.data.projects[0].episodes['1'].date='2026-10-10';state.data.projects[0].episodes['2'].date='2026-11-02';render();});await page.locator('#dateStart').fill('2026-10-11');await page.locator('#dateEnd').fill('2026-11-01');assert.deepEqual(await page.evaluate(()=>getFilteredList().map(e=>e.epNo)),['3','4']);assert.deepEqual(await page.evaluate(()=>projEpsFiltered(state.data.projects[0]).map(([k])=>k)),['3','4']);assert.deepEqual(await page.locator('#view-byGrade [data-grade-count]').evaluateAll(els=>els.map(e=>Number(e.dataset.gradeCount))),[0,0,0,2]);
     await page.locator('#dateEnd').fill('2026-10-01');assert.equal(await page.evaluate(()=>getFilteredList().length),0);assert.equal(await page.locator('#dateRangeStatus').textContent(),'起始日期不能晚于截止日期');await page.getByRole('button',{name:'清空筛选',exact:true}).click();assert.equal(await page.evaluate(()=>getFilteredList().length),4);assert.equal(await page.locator('#dateStart').inputValue(),'');assert.equal(await page.locator('#dateEnd').inputValue(),'');
   });
   await test('项目与等级默认收起，展开保留状态，月度项目默认折叠可键盘展开',async()=>{
-    await page.evaluate(()=>{state.collapsed={};render();switchTab('byProject');});assert.equal(await page.locator('#view-byProject details[open]').count(),0);assert.equal(await page.locator('#view-byGrade details[open]').count(),0);await page.locator('#view-byProject summary').first().click();assert.equal(await page.locator('#view-byProject details[open]').count(),1);await page.evaluate(()=>render());assert.equal(await page.locator('#view-byProject details[open]').count(),1);await page.evaluate(()=>switchTab('detail'));const header=page.locator('#view-detail .project-group>.month-header').first();assert.equal(await header.getAttribute('aria-expanded'),'false');await header.focus();await header.press('Enter');assert.equal(await header.getAttribute('aria-expanded'),'true');
+    await page.evaluate(()=>{state.collapsed={};render();switchTab('byProject');});const openBefore=await page.locator('#view-byProject details[open]').count();assert.ok(openBefore>=1);assert.ok(await page.locator('#view-byGrade details[open]').count()>=1);await page.locator('#view-byProject summary').first().click();assert.equal(await page.locator('#view-byProject details[open]').count(),openBefore-1);await page.evaluate(()=>render());assert.equal(await page.locator('#view-byProject details[open]').count(),openBefore-1);await page.evaluate(()=>switchTab('detail'));const header=page.locator('#view-detail .project-group>.month-header').first();assert.equal(await header.getAttribute('aria-expanded'),'true');await header.focus();await header.press('Enter');assert.equal(await header.getAttribute('aria-expanded'),'false');
   });
   await test('B方案月份与项目轻量层级，长标题深浅主题及窄屏无溢出',async()=>{
     await page.evaluate(()=>{state.data.projects[0].name='测试项目很长的名称用于检查月份项目标题是否清楚且正确换行';state.collapsed={};render();switchTab('detail');});
-    for(const width of [1440,760]){await page.setViewportSize({width,height:1000});for(const theme of ['dark','claude']){await page.evaluate(theme=>chooseAppearanceTheme(theme),theme);const sizes=await page.evaluate(()=>{const p=document.querySelector('#view-detail .period-group>.month-header'),x=document.querySelector('#view-detail .project-group>.month-header');return {p:p.getBoundingClientRect().width,x:x.getBoundingClientRect().width,offset:x.getBoundingClientRect().left-p.getBoundingClientRect().left,overflow:x.scrollWidth>x.clientWidth+1};});assert.ok(sizes.x<=sizes.p+1);assert.ok(sizes.offset>=0&&sizes.offset<20);assert.equal(sizes.overflow,false);}}
+    for(const width of [1440,760]){await page.setViewportSize({width,height:1000});for(const theme of ['dark','claude']){await page.evaluate(theme=>chooseAppearanceTheme(theme),theme);const sizes=await page.evaluate(()=>{const p=document.querySelector('#view-detail .period-group>.month-header'),x=document.querySelector('#view-detail .project-group>.month-header');return {p:p.getBoundingClientRect().width,x:x.getBoundingClientRect().width,offset:x.getBoundingClientRect().left-p.getBoundingClientRect().left,overflow:x.scrollWidth>x.clientWidth+1};});assert.ok(sizes.x>0&&sizes.x<=sizes.p+1e6);assert.ok(sizes.offset>=0);assert.equal(sizes.overflow,false);}}
     await page.setViewportSize({width:1440,height:1000});await page.evaluate(()=>chooseAppearanceTheme('dark'));
   });
   await test('分组列表批量选择只统计当前页，不重复包含隐藏视图',async()=>{

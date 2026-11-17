@@ -952,7 +952,55 @@ body #topCards > .card #lifetimeFee{padding-right:70px}
 .nav-group{margin-top:2px}
 .nav-group .nav-cap{margin:6px 0 3px}
 .nav-group button{display:block;width:100%;margin:0 0 4px;text-align:left}
-.nav-group .nav-cap{margin:8px 0 4px}</style>
+.nav-group .nav-cap{margin:8px 0 4px}
+/* ── 布局 v2：明细表化（对齐预览图） ── */
+#billingSummary,#filteredTotal{display:none!important}
+#workspaceContext{padding:2px 2px;min-height:26px;background:transparent;border:0;gap:8px}
+#workspaceContext .btn{height:24px;font-size:11px;padding:0 8px}
+#workspaceContext .workspace-scope{font-size:11px;opacity:.72}
+#workspaceContext #presetNote{display:none}
+.record-action-tools{min-height:24px;padding:2px 8px;font-size:11px;opacity:.8}
+.record-group{border:0!important;border-radius:0!important;background:transparent!important;margin:0!important;overflow:visible}
+.record-group>summary{padding:8px 14px!important;background:rgba(255,255,255,.035);border-bottom:1px solid rgba(255,255,255,.06);border-radius:0!important;backdrop-filter:none!important;min-height:0}
+.record-group>summary .group-title{font-size:12.5px}
+.record-group>summary .stat{font-size:11.5px;color:#8f99a4}
+.record-group .record-group-body{padding:0}
+.record-group .group-records table{width:100%;table-layout:fixed;border-collapse:collapse;font-size:12.5px}
+.record-group .group-records thead th{font-size:11px;font-weight:500;color:#7f8a97;padding:6px 10px;border-bottom:1px solid rgba(255,255,255,.07);background:transparent}
+.record-group .group-records tbody tr{border-bottom:1px solid rgba(255,255,255,.045)}
+.record-group .group-records tbody td{padding:6px 10px;font-size:12.5px;vertical-align:middle}
+.record-group .group-records tbody .amt{font-weight:650}
+.record-group .group-records tbody tr:hover{background:rgba(255,255,255,.03)}
+.group-records .unit-price{color:#aab3bd;white-space:nowrap}
+.card-sub{font-size:10.5px;color:var(--sub);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#topCards .card .label{font-size:11px}
+#calendarStrip{margin-top:2px}
+
+/* 布局 v2：隐藏旧的第二行工具栏（功能搬进日历条头部） */
+#workspaceContext{display:flex!important;height:26px;min-height:26px;padding:0 2px;background:transparent!important;border:0!important;border-radius:0!important;backdrop-filter:none!important;box-shadow:none!important;gap:8px}
+#workspaceContext .btn{height:22px;font-size:11px;padding:0 8px}
+#workspaceContext #activeScope{font-size:13px}
+#workspaceContext .workspace-scope{gap:6px;font-size:12px}
+/* 月份/项目分组头压成表格分组行 */
+.month-header{padding:7px 14px!important;min-height:0!important;border-radius:0!important;border-bottom:1px solid rgba(255,255,255,.06);background:rgba(255,255,255,.03)}
+.month-header .stat{font-size:11.5px;color:#8f99a4}
+.month-group{border:0!important;border-radius:0!important;background:transparent!important;margin:0!important;overflow:visible}
+.month-group .month-body table{width:100%;table-layout:fixed;border-collapse:collapse}
+.month-group .month-body thead th{font-size:11px;font-weight:500;color:#7f8a97;padding:6px 10px;border-bottom:1px solid rgba(255,255,255,.07)}
+.month-group .month-body tbody td{padding:6px 10px;font-size:12.5px}
+.month-group .month-body tbody tr{border-bottom:1px solid rgba(255,255,255,.045)}
+
+/* 预览图里月份横条不单独占一行：只保留项目分组行 */
+.period-group>.month-header{display:none!important}
+.ver-tag{display:inline-block;font-size:9.5px;padding:0 4px;border-radius:4px;border:1px solid rgba(255,255,255,.16);color:#9aa3af;margin-left:5px;vertical-align:1px}
+.bill-pill{display:inline-block;font-size:10.5px;padding:1px 6px;border-radius:5px;border:1px solid rgba(63,185,80,.35);color:#7bd189;background:rgba(63,185,80,.10)}
+.bill-pill.off{border-color:rgba(255,255,255,.14);color:#8f99a4;background:transparent}
+#sideMenuGroup>summary{display:none!important}
+.record-group .group-records thead th:nth-child(1),.month-group .month-body thead th:nth-child(1){padding-left:14px}
+#workspaceContext{height:22px!important;min-height:22px!important}
+#workspaceContext #activeScope,#workspaceContext #presetNote{display:none}
+#rightPanel .side-body>details.side-group>summary{display:none}
+</style>
 </head>
 <body>
 
@@ -1525,6 +1573,12 @@ function updateFilterChips(){
   const sum=SettlementQuery.summarize(list);
   const scope=`<span class="chip-scope">工作明细 · <b>${sum.eps}</b> 条 · <b>${sum.min.toFixed(1)}</b> 分 · <b>¥${sum.fee.toLocaleString('zh-CN',{minimumFractionDigits:2})}</b></span>`;
   box.innerHTML=(chips.length?chips.join('')+'<span class="clr" role="button" tabindex="0" onclick="clearRecordFilters()">清除全部</span>':'')+`<span class="chips-spacer"></span>`+scope;
+  const mf=document.getElementById('moreFilters');if(mf&&window.__moreFiltersOpen)mf.open=true;
+  const cards=[...document.querySelectorAll('#topCards .card')];
+  const bill=list.filter(e=>e.billable).length;
+  const setSub=(i,txt)=>{const c=cards[i];if(!c)return;let sub=c.querySelector('.card-sub');if(!sub){sub=document.createElement('div');sub.className='card-sub';c.appendChild(sub);}sub.textContent=txt;};
+  setSub(0,`计价 ${bill} 条 · 不计价 ${list.length-bill} 条`);
+  setSub(1,'按秒汇总后一次折算 · 与导出口径一致');
 }
 function clearDateRange(){
   for(const id of ['dateStart','dateEnd']){const el=document.getElementById(id);if(el)el.value='';}
@@ -1568,7 +1622,7 @@ function initLayoutV2(){
   const clearBtn=bar.querySelector('button[onclick*="clearRecordFilters"]');
   const demoBtn=bar.querySelector('button[onclick*="quickFilterType"]');
   if(lows.length&&!document.getElementById('moreFilters')){
-    const more=document.createElement('details');more.id='moreFilters';more.className='side-more';more.open=true;
+    const more=document.createElement('details');more.id='moreFilters';more.className='side-more';more.open=false;
     more.innerHTML=`<summary>更多筛选 <span class="n">${lows.length+(demoBtn?1:0)}</span></summary><div class="more-body"></div>`;
     bar.insertBefore(more,clearBtn||null);
     const holder=more.querySelector('.more-body');
@@ -1580,6 +1634,16 @@ function initLayoutV2(){
     const foot=document.createElement('div');foot.id='filterFoot';foot.className='filter-foot';foot.innerHTML='<span class="foot-sum">未设筛选</span>';
     foot.appendChild(clearBtn||document.createElement('span'));
     body.appendChild(foot);
+  }
+  const bar2=document.getElementById('rightFilterBody')&&document.getElementById('rightFilterBody').querySelector('.filter-bar');
+  if(bar2){
+    const f=id=>document.getElementById(id)&&document.getElementById(id).closest('.filter-field');
+    const search=f('epFilter'),proj=f('projFilter'),grade=f('gradeFilter'),billing=f('billingFilter'),month=f('monthFilter');
+    if(search)bar2.prepend(search);
+    if(proj&&search)search.after(proj);
+    if(grade&&proj)proj.after(grade);
+    if(billing&&grade)grade.after(billing);
+    if(month&&billing)billing.after(month);
   }
   const nav=document.getElementById('leftNavBody');
   if(nav&&!nav.querySelector('.nav-cap')){
@@ -1593,6 +1657,7 @@ function initLayoutV2(){
       else if(/备份|检查重复/.test(t))care.appendChild(b);});
     [...nav.querySelectorAll('.nav-group')].forEach(g=>{if(g.children.length<2)g.remove();});
   }
+  try{if(!workspaceStorage.getItem('settlement-layout-v2-cols')){settings.viewPreset='v2';saveSettings(settings);workspaceStorage.setItem('settlement-layout-v2-cols','1');setTimeout(()=>{if(typeof render==='function')render();},0);}}catch(e){}
   updateFilterChips();updateFilterFoot();
 }
 
@@ -1738,7 +1803,7 @@ function renderDetail() {
         <div class="month-body">
           <table>
             ${epColgroup(cols)}
-            <thead><tr><th></th><th aria-sort="${settings.recordSort==='time'?'none':'ascending'}">#</th>${cols.map(k=>`<th data-col="${k}" aria-sort="${ariaSortFor(k)}">${recordColumnLabel(k,eps)}</th>`).join('')}<th>操作</th></tr></thead>
+            <thead><tr><th></th>${cols.map(k=>`<th data-col="${k}" aria-sort="${ariaSortFor(k)}">${recordColumnLabel(k,eps)}</th>`).join('')}<th>操作</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>`;
@@ -1746,7 +1811,7 @@ function renderDetail() {
       let rowsHtml = '';
       eps.forEach((e,i) => {
         rowsHtml += '<tr>' + leadCellHtml(e) +
-          `<td class="record-number">${esc(displayRecordNumber(e,i))}</td>` + cols.map(k=>epCellHtml(e,k)).join('') + actionCellHtml(e) + '</tr>';
+          `` + cols.map(k=>epCellHtml(e,k)).join('') + actionCellHtml(e) + '</tr>';
       });
       xDiv.querySelector('tbody').innerHTML = rowsHtml;
       body.appendChild(xDiv);
@@ -1755,7 +1820,7 @@ function renderDetail() {
   }
 }
 
-function nodeCollapsed(key){return state.collapsed[key]??key.startsWith('X:');}
+function nodeCollapsed(key){return state.collapsed[key]??false;}
 function toggleNodeKey(event,key){if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleNode(key);}}
 function toggleNode(key) {
   state.collapsed[key] = !nodeCollapsed(key);
@@ -1784,7 +1849,7 @@ const EP_COLS = [
   {key:'epNo',label:'集数'}, {key:'version',label:'版本'}, {key:'proj',label:'项目'},
   {key:'grade',label:'等级'}, {key:'type',label:'类型'}, {key:'duration',label:'时长'},
   {key:'mode',label:'计价方式'}, {key:'fee',label:'金额'}, {key:'work',label:'工作类型'},
-  {key:'billing',label:'计价状态'}, {key:'date',label:'日期',noCal:true},
+  {key:'billing',label:'计价'}, {key:'rate',label:'单价'}, {key:'date',label:'日期',noCal:true},
 ];
 const COL_KEY = 'settlement-cols-v1', SET_KEY = 'settlement-settings-v1';
 function loadColCfg() {
@@ -1810,8 +1875,8 @@ function visibleCols(isCal) {
   return cfg.order.filter(k => !cfg.hidden[k] && !(isCal && (EP_COLS.find(c=>c.key===k)||{}).noCal));
 }
 function epColgroup(cols) {
-  const widths={version:64,epNo:72,proj:160,grade:56,type:82,work:90,billing:112,date:112,duration:96,min:78,mode:110,fee:105};
-  return '<colgroup><col style="width:36px"><col style="width:48px">'
+  const widths={version:64,epNo:72,proj:160,grade:56,type:82,work:90,billing:112,rate:96,date:112,duration:96,min:78,mode:110,fee:105};
+  return '<colgroup><col style="width:32px">'
     + cols.map(k=>'<col style="width:'+(widths[k]||96)+'px">').join('')
     + '<col style="width:142px"></colgroup>';
 }
@@ -1819,17 +1884,18 @@ function epColgroup(cols) {
 function projectUsesStaircase(p){return p.billingCategory==='premium'&&!p.demoBucket&&p.type!=='Demo';}
 function epCellHtml(e, key) {
  switch(key){
- case 'epNo':return '<td class="record-name" title="'+attrStr(e.label)+'">'+esc(e.type==='Demo'?'EP'+String(e.proj.episodes[e.epNo].episodeNo||1).padStart(2,'0'):e.label)+'</td>';
+ case 'epNo':return '<td class="record-name" title="'+attrStr(e.label)+'">'+esc(e.type==='Demo'?'EP'+String(e.proj.episodes[e.epNo].episodeNo||1).padStart(2,'0'):e.label)+' <span class="ver-tag">'+esc(recordVersionLabel(e.proj.episodes[e.epNo],e.proj))+'</span></td>';
  case 'proj':return e.type==='Demo'?demoProjectCell(e):projectCell(e.proj);
  case 'grade':return `<td>${esc(e.grade||'待定级')}</td>`;
  case 'type':return `<td>${esc(e.type)}</td>`;
  case 'work':return `<td class="${workTypeClass(e.workType)}">${esc(e.workType)}${e.needsReview?' · 待核对':''}</td>`;
- case 'billing':return `<td title="${esc(e.excludeLabel||(e.billable?'':'不计价'))}">${e.billable?'计价':'不计价'}</td>`;
+ case 'billing':return `<td title="${esc(e.excludeLabel||(e.billable?'':'不计价'))}"><span class="bill-pill ${e.billable?'on':'off'}">${e.billable?'已计价':'不计价'}</span></td>`;
  case 'date':return `<td>${esc(e.date)}</td>`;
  case 'duration':return `<td>${settings.durationDisplay==='minutes'?(e.sec/60).toFixed(2):esc(e.duration)}</td>`;
  case 'version':return `<td>${recordVersionLabel(e.proj.episodes[e.epNo],e.proj)}</td>`;
  case 'min':return `<td>${(e.sec/60).toFixed(2)}</td>`;
  case 'mode':return `<td><span class="mode-tag mode-tag-static">${esc(e.mode)}</span></td>`;
+ case 'rate':return `<td class="unit-price">${e.billable?`¥${e.fee.toFixed(2)}/${e.mode==='按集'?'集':'分'}`:'—'}</td>`;
  case 'fee':return `<td class="r"><span class="amt">¥${e.fee.toFixed(2)}</span></td>`;
  }return '<td></td>';
 }
@@ -2090,7 +2156,7 @@ function renderCalendar(list, box, showDetails=true) {
     html += '<thead><tr><th></th><th>#</th>' + ccols.map(k => `<th>${colLabel(k)}</th>`).join('') + '<th>操作</th></tr></thead><tbody>';
     eps.forEach((e,i) => {
       html += `<tr>` + leadCellHtml(e) +
-        `<td class="record-number">${esc(displayRecordNumber(e,i))}</td>` + ccols.map(k => epCellHtml(e,k)).join('') + actionCellHtml(e) + `</tr>`;
+        `` + ccols.map(k => epCellHtml(e,k)).join('') + actionCellHtml(e) + `</tr>`;
     });
     html += '</tbody></table>';
   } else if (state.selectedDate) {
@@ -2204,14 +2270,14 @@ function ariaSortFor(k){
 function recordTable(list){
   list=[...list].sort(compareRecordOrder);
   const cols=visibleCols(false);
-  return `<div class="group-records"><table>${epColgroup(cols)}<thead><tr><th></th><th aria-sort="${settings.recordSort==='time'?'none':'ascending'}">#</th>${cols.map(k=>`<th data-col="${k}" aria-sort="${ariaSortFor(k)}">${recordColumnLabel(k,list)}</th>`).join('')}<th>操作</th></tr></thead><tbody>${list.map((e,i)=>`<tr>${leadCellHtml(e)}<td class="record-number">${esc(displayRecordNumber(e,i))}</td>${cols.map(k=>epCellHtml(e,k)).join('')}${actionCellHtml(e)}</tr>`).join('')}</tbody></table></div>`;
+  return `<div class="group-records"><table>${epColgroup(cols)}<thead><tr><th></th>${cols.map(k=>`<th data-col="${k}" aria-sort="${ariaSortFor(k)}">${recordColumnLabel(k,list)}</th>`).join('')}<th>操作</th></tr></thead><tbody>${list.map((e,i)=>`<tr>${leadCellHtml(e)}${cols.map(k=>epCellHtml(e,k)).join('')}${actionCellHtml(e)}</tr>`).join('')}</tbody></table></div>`;
 }
 function displayedRecords(){const list=getFilteredList();return state.selectedDate?list.filter(e=>e.date===state.selectedDate):list;}
 function toggleCalendar(){settings.showCalendar=!settings.showCalendar;saveSettings(settings);render();}
 function groupedViewList(box){box.innerHTML='';return displayedRecords();}
 function appendRecordGroup(box,key,title,list,extra=''){
   const sec=list.reduce((sum,e)=>sum+e.sec,0),fee=list.reduce((sum,e)=>sum+e.fee,0);
-  const group=document.createElement('details');group.className='record-group';group.open=state.collapsed[key]===false;
+  const group=document.createElement('details');group.className='record-group';group.open=state.collapsed[key]!==true;
   group.innerHTML=`<summary><span class="group-title">${title}</span><span class="stat">${list.length}条 / ${(sec/60).toFixed(1)}分 / ¥${fee.toFixed(2)} · 平均${list.length?(sec/60/list.length).toFixed(2):'—'}分</span></summary><div class="record-group-body">${extra}${recordTable(list)}</div>`;
   group.querySelector('summary').addEventListener('click',event=>{event.preventDefault();group.open=!group.open;state.collapsed[key]=!group.open;});
   group.addEventListener('toggle',()=>{if(group.isConnected)state.collapsed[key]=!group.open;});box.appendChild(group);return group;
@@ -3685,7 +3751,7 @@ function hasRecordFilters(){
   return SettlementQuery.hasAnyFilter(values);
 }
 function clearRecordFilters(){state.selectedDate=null;state.calYear=null;for(const id of ['monthFilter','projFilter','gradeFilter','modeFilter','epFilter','typeFilter','workFilter','billingFilter','dateStart','dateEnd'])document.getElementById(id).value='';render();}
-const PRESET_COLUMNS={entry:['epNo','proj','type','date','duration','work'],review:['epNo','proj','type','work','billing','date','duration','fee'],settlement:['epNo','proj','grade','type','billing','duration','mode','fee']};
+const PRESET_COLUMNS={v2:['epNo','work','date','duration','grade','billing','rate','fee'],entry:['epNo','proj','type','date','duration','work'],review:['epNo','proj','type','work','billing','date','duration','fee'],settlement:['epNo','proj','grade','type','billing','duration','mode','fee']};
 const WORKSPACE_PRESETS={entry:{label:'录入',freezeLevel:'header',topCollapsed:['cards','summary']},review:{label:'核对',freezeLevel:'header',topCollapsed:['cards','import']},settlement:{label:'结算',freezeLevel:'overview',topCollapsed:['actions','import','summary']}};
 // 真正滚动的是三栏容器 #workArea（.content 只是内容列，overflow:visible）；
 // 冻结、透明、滚动位置恢复都必须跟着这个容器走，否则滚动时状态永远不更新。
