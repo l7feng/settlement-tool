@@ -4,6 +4,8 @@
 
 | 日期 | 提交 | 说明 |
 | --- | --- | --- |
+| 2026-11-17 | s4(4.4) | **xlsx 懒加载**：删掉启动即加载的 `<script src="assets/xlsx.full.min.js">` 与 `document.write` + `cdn.jsdelivr.net` 兜底（原兜底会在断网时静默失败且文案误导）；新增 `ensureXlsx()`，首次点导出才注入本地 `assets/xlsx.full.min.js`，缺文件时报「请用完整发布包重新安装，本工具不需要联网」。启动不再解析 881 KB |
+| 2026-11-17 | s4(4.5) | **示例数据脱敏外移**：`DEFAULT_DATA` 从页面内联字面量（20 个项目、真实剧名与 `D:\Project` 实际路径）移到 `assets/demo-fixture.js`（`window.SETTLEMENT_DEMO_FIXTURE`，合成剧名「示例剧甲…辛 / 示例 Demo 一/二」与 `D:\Project\示例\…` 合成路径）；新增 `tests/test_demo_fixture.py` 4/4（页面零真实剧名/路径、页面读 fixture、xlsx 不再启动即加载） |
 | 2026-11-17 | s3(3.1) | **测试两档化**：新增 `tests/suites.json`（套件清单唯一来源）与 `tools/run-unit.mjs` / `tools/run-ui.mjs`，`package.json` 提供 `npm run test:unit`（无浏览器依赖，**15 套 2.2 s**）、`test:ui`（自动设 `SETTLEMENT_WEB_ROOT`=仓库、`SETTLEMENT_TIMEOUT=300000`）、`test`；`tools/run_tests.py` 改为读同一份 `suites.json`，两处清单不再漂移。`package.json` 声明 `playwright` 为 devDependency（本机未 `npm install` 时 `playwright-runtime` 仍自动回退到系统 Edge） |
 | 2026-11-17 | s3(3.3) | **构建单一真源**：`tools/build_exe.py` 的 `WEB_ROOT` 默认改为**仓库自身**（不再读 `Tools\Html\settlement-tool`）；新增 `check_sources()`——仓库页面与工作副本页面对不上就中止并打印两边路径 + 谁较新，缺 `VERSION` 也中止；解释器路径可用 `SETTLEMENT_PY` 覆盖；打包前提示 icons 目录里的 `.bak` 备份件不进包。`tests/test_build_source.py` 6/6（含「分叉必拦」「页面无写死版本」）。**注意：本机工作副本仍是旧页面，所以现在直接打包会按设计中止**——同步那一步归 S3-3.3 收尾/D6 解冻 |
 | 2026-11-17 | s3(3.4) | **版本号单一来源**：新增 `tools/sync_version.py`（`VERSION` → `assets/version.js`，`--check` 不一致返回 1）；页面 `const APP_VERSION = '2.8.3'` 改为 `window.SETTLEMENT_VERSION`，并加 `<script src="assets/version.js">`；`build_exe` 打包前强制 `--check`。界面版本、VERSION 文件、包名三处永远一致 |
