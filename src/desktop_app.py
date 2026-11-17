@@ -302,6 +302,19 @@ def start_page_server(root):
                 log('[server] 已把升级前快照原文搬到 upgrade/ 目录')
         except Exception as error:
             log('[server] 快照外置跳过：%s' % error)
+        # 4.9：老库补记 sha256 侧车（存在才写，不阻断启动）
+        try:
+            if srv.workspace.ensure_digest():
+                log('[integrity] 已为现有账本补记 sha256 校验文件')
+        except Exception as error:
+            log('[integrity] 校验文件补记跳过：%s' % error)
+        # 4.9：每周 zip 备份（同一周只做一次，留最近 8 周）
+        try:
+            backup = srv.workspace.weekly_backup()
+            if backup:
+                log('[backup] 已生成本周备份 %s' % backup.name)
+        except Exception as error:
+            log('[backup] 每周备份跳过：%s' % error)
         # 数据目录自清洁（白名单+保留最新 N 份，逐条写日志）
         try:
             import data_hygiene

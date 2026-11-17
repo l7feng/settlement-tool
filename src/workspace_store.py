@@ -37,6 +37,10 @@ class RevisionConflict(ValueError):
 
 class WorkspaceStore:
     SNAPSHOT_KEEP = 5
+    # 4.9：文件头校验与每周备份
+    INTEGRITY_SIDECAR = 'workspace.json.sha256'
+    BACKUP_DIR = 'backup'
+    WEEKLY_KEEP = 8
 
     def __init__(self, root):
         self.root = Path(root)
@@ -106,13 +110,84 @@ class WorkspaceStore:
         with self.lock:
             if not self.path.exists():
                 return {'formatVersion': 1, 'app': 'settlement-workbench', 'revision': 0, 'storage': {}}
-            value = json.loads(self.path.read_text(encoding='utf-8'))
-            if not isinstance(value, dict) or value.get('formatVersion') != 1 or value.get('app') != 'settlement-workbench':
-                raise ValueError('工作区文件格式无效，原文件已保留')
-            if type(value.get('revision')) is not int or value['revision'] < 1:
-                raise ValueError('工作区版本无效')
+            raw = self.path.read_bytes()
+            digest = hashlib.sha256(raw).hexdigest()
+            expected = self._expected_digest()
+            if expected and digest != expected:
+                # 校验不一致：先看内容还能不能读。
+                # 读不了＝损坏 → 隔离 + 快照恢复；能读＝外部写入（旧版本程序、手工修复）→
+                # 记一笔并重新登记校验值。若一律隔离，旧版程序写过的账会被新版本当坏文件，
+                # 反而丢掉最新数据。
+                try:
+                    value = self._parse(raw)
+                    self.validate(value.get('storage'))
+                except ValueError:
+                    return self._recover_corrupt(digest, expected)
+                print('[integrity] 文件 sha256 与侧车不一致（外部写入或篡改），内容可解析，已重新登记校验值')
+                self._write_digest(raw)
+                return value
+            value = self._parse(raw)
             self.validate(value.get('storage'))
             return value
+
+    def _parse(self, raw):
+        value = json.loads(raw.decode('utf-8'))
+        if not isinstance(value, dict) or value.get('formatVersion') != 1 or value.get('app') != 'settlement-workbench':
+            raise ValueError('工作区文件格式无效，原文件已保留')
+        if type(value.get('revision')) is not int or value['revision'] < 1:
+            raise ValueError('工作区版本无效')
+        return value
+
+    def _expected_digest(self):
+        """侧车里记的 sha256；缺失或格式不对就当没有校验（老库平滑升级）。"""
+        try:
+            text = (self.root / self.INTEGRITY_SIDECAR).read_text(encoding='utf-8').strip()
+        except OSError:
+            return None
+        parts = text.split()
+        return parts[0].lower() if parts and re.fullmatch(r'[0-9a-fA-F]{64}', parts[0]) else None
+
+    def _write_digest(self, raw):
+        try:
+            self._atomic(self.root / self.INTEGRITY_SIDECAR,
+                (hashlib.sha256(raw).hexdigest() + '  workspace.json\n').encode('utf-8'))
+        except OSError:
+            pass    # 校验文件写不成不能拖累主写入
+
+    def _quarantine_corrupt(self):
+        """把坏文件改名隔离（绝不覆盖），返回隔离后的路径。"""
+        stamp = datetime.now().strftime('%Y%m%d-%H%M%S')
+        target = self.root / ('workspace.corrupt-%s.json' % stamp)
+        index = 1
+        while target.exists():
+            target = self.root / ('workspace.corrupt-%s-%d.json' % (stamp, index))
+            index += 1
+        try:
+            os.replace(self.path, target)
+        except OSError:
+            return None
+        return target
+
+    def _recover_corrupt(self, digest, expected):
+        """校验不一致：先隔离坏文件，再从最新可用快照恢复，避免用户看到空账。"""
+        quarantined = self._quarantine_corrupt()
+        for snapshot in sorted((p for p in self.snapshot_dir.glob('workspace.r*.json')
+                if p.name[len('workspace.r'):-len('.json')].isdigit()),
+                key=lambda p: int(p.name[len('workspace.r'):-len('.json')]), reverse=True):
+            try:
+                raw = snapshot.read_bytes()
+                value = self._parse(raw)
+                self.validate(value.get('storage'))
+            except (OSError, ValueError):
+                continue
+            self._atomic(self.path, raw)
+            self._write_digest(raw)
+            self.recovered_from = str(snapshot)
+            print('[integrity] 工作区校验失败（sha256 %s ≠ %s），已隔离为 %s，并从快照 %s 恢复'
+                  % (digest[:12], expected[:12], quarantined or '(改名失败)', snapshot.name))
+            return value
+        raise ValueError('工作区文件校验失败（已隔离为 %s），且没有可用快照；请从 %s 目录的备份恢复'
+                         % (quarantined.name if quarantined else '（改名失败）', self.BACKUP_DIR))
 
     def _atomic(self, target, raw):
         self.root.mkdir(parents=True, exist_ok=True)
@@ -217,6 +292,7 @@ class WorkspaceStore:
         if self.path.exists() and self._should_refresh_previous(snapshot=snapshot):
             self._atomic(self.root / 'workspace.previous.json', self.path.read_bytes())
         self._atomic(self.path, raw)
+        self._write_digest(raw)     # 4.9：写入后立刻记录文件头 sha256，下次读取据此发现篡改
         # 只有账本类变化才留版本快照；主题/列宽这类高频设置不值得每次 fsync 一份 400KB。
         if snapshot:
             self._write_snapshot(result)
@@ -430,3 +506,55 @@ class WorkspaceStore:
             target = self.root / name
             if not target.exists():
                 self._atomic(target, raw)
+
+    # ── 每周 zip 备份（4.9）────────────────────────────────────────────
+    def ensure_digest(self):
+        """老库（没有校验侧车）启动时补一次：先确认能解析，再记下当前文件 sha256。"""
+        if not self.path.exists() or self._expected_digest():
+            return False
+        try:
+            raw = self.path.read_bytes()
+            self._parse(raw)
+        except (OSError, ValueError):
+            return False
+        self._write_digest(raw)
+        return True
+
+    def weekly_backup(self, now=None):
+        """每周一包 zip（workspace.json + 当前快照），同一周只做一次，只留最近 N 周。
+
+        返回新建的 zip 路径；本周已有备份或没有账本时返回 None。
+        """
+        now = now or datetime.now()
+        if not self.path.exists():
+            return None
+        iso = now.isocalendar()
+        name = 'workspace-%04d-W%02d.zip' % (iso[0], iso[1])
+        target = self.root / self.BACKUP_DIR / name
+        try:
+            if target.exists():
+                return None
+            target.parent.mkdir(parents=True, exist_ok=True)
+            import zipfile
+            tmp = target.with_name(target.name + '.tmp')
+            with zipfile.ZipFile(tmp, 'w', zipfile.ZIP_DEFLATED) as archive:
+                archive.write(self.path, arcname='workspace.json')
+                for snapshot in sorted(self.snapshot_dir.glob('workspace.r*.json')):
+                    archive.write(snapshot, arcname='snapshots/' + snapshot.name)
+            os.replace(tmp, target)
+            self._prune_weekly_backups()
+            return target
+        except OSError:
+            return None
+
+    def _prune_weekly_backups(self):
+        try:
+            existing = sorted((p for p in (self.root / self.BACKUP_DIR).glob('workspace-*-W*.zip')
+                if re.fullmatch(r'workspace-\d{4}-W\d{2}\.zip', p.name)), key=lambda p: p.name)
+        except OSError:
+            return
+        for stale in existing[:-self.WEEKLY_KEEP]:
+            try:
+                stale.unlink()
+            except OSError:
+                pass

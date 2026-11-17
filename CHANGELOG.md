@@ -4,6 +4,7 @@
 
 | 日期 | 提交 | 说明 |
 | --- | --- | --- |
+| 2026-11-17 | s4(4.9) | **数据完整性三件套**：①`workspace.json.sha256` 侧车——每次 `_commit` 落盘后写当前文件 sha256，读取时比对；老库首次启动由 `ensure_digest()` 补记（先验证可解析再登记）。②读到校验不一致且**内容已损坏**（解析/结构校验失败）时，坏文件改名隔离为 `workspace.corrupt-<时间>.json`，再从最新可用 `snapshots/workspace.r*.json` 恢复并重写校验值；一无可用快照则抛错并指向 `backup/`。③`weekly_backup()`——每个 ISO 周一个 `backup/workspace-YYYY-Www.zip`（含 workspace.json + 当周快照），同周只做一次，保留最近 8 周，启动时调用。**刻意例外**：校验不一致但内容仍可解析时（旧版本程序/手工修复写过文件，不会更新侧车）只记一行日志并重新登记校验值，不隔离——否则旧 exe 一写，新版本就把最新账本当坏文件丢掉 |
 | 2026-11-17 | s4(4.6) | **启动握手替代像素探针**：页面在首帧后（双 `requestAnimationFrame`）调用 `pywebview.api.pageReady()`，同时监听 `pywebviewready` 兜住注入时序；后端 `_probe_pywebview` 先 `ready.wait(8)`，收到即判正常并写 `phase='handshake'` 直接返回，收不到才回落旧路径（等 loaded + sleep 3 + 客户区取色）并写 `phase='pixel'`。正常机器不再固定空等 3 s，判定由「猜像素」变「问页面」，日志能看出走的是哪条 |
 | 2026-11-17 | s4(4.7) | **旧实例提示**：`main()` 在创建窗口前先 `activate_existing_instance()`——按标题找到已在运行的同名窗口，`ShowWindow(SW_RESTORE)` + `SetForegroundWindow` 拉到前台，弹一句「已经在运行，已为你切换」后本次启动直接退出，不再开第二个窗口共用同一账本（过去要靠 revision 冲突才发现）。新增 `tests/test_startup_handshake.py` 7/7（含握手直接短路探针的行为测试） |
 | 2026-11-17 | s4(4.2) | **死代码清理（按引用复核后的子集）**：计划列的 10 个函数里有 5 个确实零引用（`toggleDelMode` / `addBatchImportGroup` / `pickBatchImportFiles` / `resetTopLayoutFields` / `saveTopLayout`），已删；另 5 个仍在用，未动——`applyViewPreset`、`toggleSidePanel` 是布局与视图真代码（UI 测试 9/12 处在调），`openReview` 被截图段与测试调用，`applyBatchWorkChanges` 被多项目导入与测试调用，`projEpsFiltered` 被筛选链调用。删除后 grep 零命中，UI 93/93 仍全绿 |
