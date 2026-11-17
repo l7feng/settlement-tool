@@ -107,4 +107,12 @@ uiLocaleObserver=new MutationObserver(uiScheduleLanguage);
 // Native confirmation dialogs also need translated copy; stored values remain Chinese.
 const uiOriginalConfirm=window.confirm.bind(window);window.confirm=message=>uiOriginalConfirm(uiTranslateText(String(message)));
 const uiOriginalAlert=window.alert.bind(window);window.alert=message=>uiOriginalAlert(uiTranslateText(String(message)));
+/* 4.10 i18n 策略：仍以中文原文为 key（不做 key 化改造）。
+   英文只保证「主流程」——登记 / 导入 / 结算 / 备份恢复 / 设置；
+   任何新增或改动的中文界面文案必须同时补一条译文，tests/test_i18n.py 会列出未翻译清单。*/
+Object.assign(UI_EN,{
+  '修改单价':'Edit rates','修改工作台名称':'Rename workbench','批量登记集数':'Add episodes in bulk',
+  '添加工作台':'Add workbench','确认项目名称与缩写':'Confirm project name & abbreviation',
+  '结算核对':'Settlement check','重复信息审核':'Duplicate review',
+});
 uiApplyLanguage();

@@ -92,6 +92,49 @@ try {
     const result = await page.evaluate(() => { state.data.projects.push({ name: '已存在', aliases: [], grade: 'D', type: '正式', mode: '按集', episodes: {} }); const before = JSON.stringify(state.data); try { applyProjectRenames([{ from: '缩写', to: '已存在' }]); } catch {} return JSON.stringify(state.data) === before; });
     assert.equal(result, true);
   });
+  await test('F2 打开登记入口，Esc 关闭并把焦点还回触发点', async () => {
+    await page.evaluate(() => document.getElementById('epFilter').focus());
+    await page.keyboard.press('F2');
+    await page.waitForFunction(() => document.getElementById('modalMask').classList.contains('show'));
+    // gui-docking 会把 openRecordActions 换成「导入与登记」版式，两者都算登记入口
+    const body = await page.evaluate(() => document.getElementById('modalBox').textContent || '');
+    assert.ok(body.includes('登记'), 'F2 没有打开登记入口');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.getElementById('modalMask').classList.contains('show'));
+    const focused = await page.evaluate(() => document.activeElement?.id || '');
+    assert.equal(focused, 'epFilter');
+  });
+  await test('Ctrl+F 聚焦搜索框并选中已有内容', async () => {
+    await page.locator('#epFilter').fill('7');
+    await page.evaluate(() => document.activeElement.blur());
+    await page.keyboard.press('Control+f');
+    const state = await page.evaluate(() => ({ id: document.activeElement?.id || '', selected: document.getElementById('epFilter').selectionEnd }));
+    assert.equal(state.id, 'epFilter');
+    assert.ok(state.selected >= 1, '搜索框内容未被选中');
+  });
+  await test('表头 aria-sort 跟随记录排序切换', async () => {
+    const result = await page.evaluate(() => {
+      const pick = (mode) => { settings.recordSort = mode; render(); const th = document.querySelector('table th[data-col="date"]'); const no = [...document.querySelectorAll('table th')].find(x => x.textContent === '#'); return { date: th?.getAttribute('aria-sort'), no: no?.getAttribute('aria-sort') }; };
+      return { time: pick('time'), episode: pick('episode') };
+    });
+    assert.equal(result.time.date, 'descending');
+    assert.equal(result.time.no, 'none');
+    assert.equal(result.episode.no, 'ascending');
+    assert.equal(result.episode.date, 'none');
+  });
+  await test('弹窗内 Tab 循环不逃出对话框', async () => {
+    const result = await page.evaluate(async () => {
+      openModal('<h2>焦点测试</h2><button id="focusA">A</button><button id="focusB">B</button>');
+      const items = modalFocusables();
+      items[0].focus();
+      return { count: items.length, first: document.activeElement.id };
+    });
+    assert.ok(result.count >= 2);
+    await page.keyboard.press('Shift+Tab');
+    const inside = await page.evaluate(() => !!document.getElementById('modalBox').contains(document.activeElement));
+    assert.equal(inside, true);
+    await page.keyboard.press('Escape');
+  });
   await test('同集多版本保留候选，不自动认定重混', async () => {
     const result = await page.evaluate(() => { const scan = scanFiles([new File(['a'], '5集 1012 V01.wav'), new File(['b'], '5集 1012 V02.wav')]); const item = scan.parsed['5']; return { count: scan.wavCount, autoRework: !!item.rework, versions: item.candidates?.length }; });
     assert.equal(result.count, 2); assert.equal(result.autoRework, false); assert.equal(result.versions, 2);

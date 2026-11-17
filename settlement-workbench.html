@@ -1532,7 +1532,7 @@ function renderDetail() {
         <div class="month-body">
           <table>
             ${epColgroup(cols)}
-            <thead><tr><th></th><th>#</th>${cols.map(k=>`<th data-col="${k}">${recordColumnLabel(k,eps)}</th>`).join('')}<th>操作</th></tr></thead>
+            <thead><tr><th></th><th aria-sort="${settings.recordSort==='time'?'none':'ascending'}">#</th>${cols.map(k=>`<th data-col="${k}" aria-sort="${ariaSortFor(k)}">${recordColumnLabel(k,eps)}</th>`).join('')}<th>操作</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>`;
@@ -1989,10 +1989,16 @@ function openRecordSort(){
  openModal(`<h2>记录排序</h2><p class="review-hint">项目内按名称自然顺序排列（正式集数从小到大）；按时间时按交付日期从近到远，同日按名称排列。月份和项目分组保持原顺序。</p><div class="modal-actions"><button class="btn" aria-pressed="${settings.recordSort!=='time'}" onclick="setRecordSort('episode')">按集数 ↑</button><button class="btn secondary" aria-pressed="${settings.recordSort==='time'}" onclick="setRecordSort('time')">按时间 ↓</button><button class="btn secondary" onclick="closeModal()">取消</button></div>`);
 }
 function setRecordSort(mode){if(!['episode','time'].includes(mode))return;settings.recordSort=mode;saveSettings(settings);closeModal();render();}
+/* 4.12：表头 aria-sort 与当前排序字段保持一致 */
+function ariaSortFor(k){
+  const sortCol = settings.recordSort==='time' ? 'date' : 'ep';
+  if(k !== sortCol) return 'none';
+  return settings.recordSort==='time' ? 'descending' : 'ascending';
+}
 function recordTable(list){
   list=[...list].sort(compareRecordOrder);
   const cols=visibleCols(false);
-  return `<div class="group-records"><table>${epColgroup(cols)}<thead><tr><th></th><th>#</th>${cols.map(k=>`<th data-col="${k}">${recordColumnLabel(k,list)}</th>`).join('')}<th>操作</th></tr></thead><tbody>${list.map((e,i)=>`<tr>${leadCellHtml(e)}<td class="record-number">${esc(displayRecordNumber(e,i))}</td>${cols.map(k=>epCellHtml(e,k)).join('')}${actionCellHtml(e)}</tr>`).join('')}</tbody></table></div>`;
+  return `<div class="group-records"><table>${epColgroup(cols)}<thead><tr><th></th><th aria-sort="${settings.recordSort==='time'?'none':'ascending'}">#</th>${cols.map(k=>`<th data-col="${k}" aria-sort="${ariaSortFor(k)}">${recordColumnLabel(k,list)}</th>`).join('')}<th>操作</th></tr></thead><tbody>${list.map((e,i)=>`<tr>${leadCellHtml(e)}<td class="record-number">${esc(displayRecordNumber(e,i))}</td>${cols.map(k=>epCellHtml(e,k)).join('')}${actionCellHtml(e)}</tr>`).join('')}</tbody></table></div>`;
 }
 function displayedRecords(){const list=getFilteredList();return state.selectedDate?list.filter(e=>e.date===state.selectedDate):list;}
 function toggleCalendar(){settings.showCalendar=!settings.showCalendar;saveSettings(settings);render();}
@@ -2342,14 +2348,59 @@ function batchDeleteEps() {
 // ═══════════════════════════════════════════════════════
 function openModal(html) {
   detachGlassSettings();
-  document.getElementById('modalBox').style.transform='';
-  document.getElementById('modalBox').innerHTML = html;
+  const box = document.getElementById('modalBox');
+  box.style.transform='';
+  box.innerHTML = html;
   document.getElementById('modalMask').classList.add('show');
+  // 4.12：记住触发点，弹窗关闭后把焦点还回去
+  modalReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  box.setAttribute('tabindex','-1');
+  const focusables = modalFocusables();
+  (focusables[0] || box).focus();
 }
 function closeModal() {
   detachGlassSettings();
   document.getElementById('modalMask').classList.remove('show');
+  // 4.12：关闭后焦点回到打开它的按钮，键盘用户不会掉到页面开头
+  const back = modalReturnFocus;
+  modalReturnFocus = null;
+  if (back && back.isConnected) { try { back.focus(); } catch (e) {} }
 }
+let modalReturnFocus = null;
+function modalFocusables() {
+  const box = document.getElementById('modalBox');
+  if (!box) return [];
+  return [...box.querySelectorAll('button,input,select,textarea,a[href],[tabindex]:not([tabindex="-1"])')]
+    .filter(el => !el.disabled && el.getClientRects().length > 0);
+}
+document.getElementById('modalMask').addEventListener('keydown', e => {
+  if (e.key === 'Escape') { e.stopPropagation(); closeModal(); return; }
+  if (e.key !== 'Tab') return;
+  const items = modalFocusables();
+  if (!items.length) return;
+  const first = items[0], last = items[items.length - 1];
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+});
+/* 4.12 全局快捷键：F2 登记、Ctrl+F 搜索、Esc 关弹窗 */
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.getElementById('modalMask').classList.contains('show')) {
+    closeModal();
+    return;
+  }
+  if (e.key === 'F2' && !e.ctrlKey && !e.altKey && !e.metaKey) {
+    e.preventDefault();
+    if (!document.getElementById('modalMask').classList.contains('show')) openRecordActions();
+    return;
+  }
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F')) {
+    const input = document.getElementById('epFilter');
+    if (!input) return;
+    e.preventDefault();
+    input.focus();
+    if (typeof input.select === 'function') input.select();
+  }
+});
 document.getElementById('modalMask').addEventListener('click', e => {
   if (e.target.id === 'modalMask') closeModal();
 });
