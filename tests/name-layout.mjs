@@ -7,13 +7,13 @@ import {pathToFileURL} from 'node:url';
 import {Script} from 'node:vm';
 const web=process.env.SETTLEMENT_WEB_ROOT||'D:/Ai-Files/Tools/Html/settlement-tool';
 const out=process.env.SETTLEMENT_EVIDENCE||'D:/Ai-Files/Repos/GitHub/settlement-tool/build/demo-latest-20261023/tests';await mkdir(out,{recursive:true});
-for(const m of (await readFile(resolve(web,'settlement-workbench.html'),'utf8')).matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi))if(m[1].trim())new Script(m[1]);
+for(const m of (await readFile(resolve(web,'settlement-workbench-legacy.html'),'utf8')).matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi))if(m[1].trim())new Script(m[1]);
 const server=createServer(async(req,res)=>{try{const file=resolve(web,'.'+new URL(req.url,'http://localhost').pathname);assert.ok(file.startsWith(resolve(web)+sep));res.setHeader('Content-Type',({'.html':'text/html;charset=utf-8','.js':'application/javascript','.svg':'image/svg+xml'}[extname(file)]||'application/octet-stream'));res.end(await readFile(file));}catch{res.writeHead(404);res.end();}});
 await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin='http://127.0.0.1:'+server.address().port;
 const browser=await chromium.launch({headless:true,executablePath:'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'}),context=await browser.newContext({viewport:{width:1440,height:1100},timezoneId:'Asia/Shanghai'});
 await context.route('**/*',r=>r.request().url().startsWith(origin+'/')?r.continue():r.abort());
 const page=await context.newPage();page.setDefaultTimeout(5000);const errors=[],results=[];page.on('pageerror',e=>errors.push(e.message));
-const fixture={prices:{A:{per_min:78,per_ep:78},B:{per_min:30,per_ep:30},C:{per_min:15,per_ep:15},D:{per_min:10,per_ep:10}},projects:[{name:'旧项目',grade:'C',type:'正式',mode:'按时长',episodes:{1:{date:'2026-09-21',duration:'00:01:00',workType:'混音'}}},{name:'精品样本',billingCategory:'premium',grade:'C',type:'正式',mode:'按时长',episodes:{1:{date:'2026-10-20',duration:'00:01:00',grade:'A',type:'Demo',workType:'混音'},2:{date:'2026-10-20',duration:'00:01:00',grade:'C',type:'正式',workType:'混音'},3:{date:'2026-10-20',duration:'00:01:00',grade:'C',type:'正式',workType:'修改'},4:{date:'2026-10-20',duration:'00:01:00',grade:'C',type:'正式',workType:'重混'}}},{name:'自动样本',billingCategory:'automation',grade:'D',type:'正式',mode:'按时长',episodes:{1:{date:'2026-10-20',duration:'00:01:00',type:'Demo',workType:'混音'}}}]};
+const fixture={prices:{A:{per_min:78,per_ep:78},B:{per_min:30,per_ep:30},C:{per_min:15,per_ep:15},D:{per_min:10,per_ep:10}},projects:[{name:'旧项目',grade:'C',type:'正式',mode:'按时长',episodes:{1:{date:'2026-09-21',duration:'00:01:00',workType:'混音'}}},{name:'精品样本',billingCategory:'premium',grade:'C',type:'正式',mode:'按时长',episodes:{1:{date:'2026-11-20',duration:'00:01:00',grade:'A',type:'Demo',workType:'混音'},2:{date:'2026-11-20',duration:'00:01:00',grade:'C',type:'正式',workType:'混音'},3:{date:'2026-11-20',duration:'00:01:00',grade:'C',type:'正式',workType:'修改'},4:{date:'2026-11-20',duration:'00:01:00',grade:'C',type:'正式',workType:'重混'}}},{name:'自动样本',billingCategory:'automation',grade:'D',type:'正式',mode:'按时长',episodes:{1:{date:'2026-11-20',duration:'00:01:00',type:'Demo',workType:'混音'}}}]};
 await context.addInitScript(data=>{if(!sessionStorage.fixture){localStorage.setItem('settlement_v1',JSON.stringify(data));localStorage.setItem('settlement-settings-v1',JSON.stringify({showCalendar:true,materialReduced:false}));sessionStorage.fixture='yes';}},fixture);
 const reset=()=>page.evaluate(data=>{state.data=normalizeData(data);state.collapsed={};settings.calendarFilters=defaultCalendarFilters();settings.showCalendar=true;dataUndoStack.length=0;closeModal();state.calYear=null;clearRecordFilters();saveData();},fixture);
 const test=async(name,fn)=>{try{await fn();results.push({name,passed:true});console.log('PASS '+name);}catch(error){results.push({name,passed:false,error:error.stack});console.error('FAIL '+name+' '+error.stack);}};
@@ -25,14 +25,14 @@ const clean=()=>page.evaluate(()=>{closeModal();state.data.projects=[];state.dis
 const preview=()=>page.evaluate(()=>prepareDemoImport());
 const stored=()=>page.evaluate(()=>JSON.stringify(state.data));
 try{
-await page.goto(origin+'/settlement-workbench.html');
+await page.goto(origin+'/settlement-workbench-legacy.html');
 await clean();
 await page.evaluate(()=>{
  const p=(name,date,type,episodes)=>({id:SettlementIdentity.newId('project'),name,grade:'D',billingCategory:'automation',type,mode:'按时长',episodes:episodes||{1:{date,duration:'00:01:00',type,workType:'混音'}}});
- state.data.projects=[p('正式项目','2026-10-01','正式'),p('Demo','2026-10-02','Demo',{
- 'demo:1':{date:'2026-10-02',duration:'00:01:00',type:'Demo',workType:'混音',demoName:'我的心',demoRevision:{take:1,version:1},demoSuperseded:true},
- 'demo:2':{date:'2026-10-03',duration:'00:01:00',type:'Demo',workType:'混音',demoName:'我的心',demoRevision:{take:1,version:2}},
- 'demo:3':{date:'2026-10-04',duration:'00:01:00',type:'Demo',workType:'混音',demoName:'很长的作品名称<安全显示>&其他文字',demoRevision:{take:2,version:3}}
+ state.data.projects=[p('正式项目','2026-11-01','正式'),p('Demo','2026-11-02','Demo',{
+ 'demo:1':{date:'2026-11-02',duration:'00:01:00',type:'Demo',workType:'混音',demoName:'我的心',demoRevision:{take:1,version:1},demoSuperseded:true},
+ 'demo:2':{date:'2026-11-03',duration:'00:01:00',type:'Demo',workType:'混音',demoName:'我的心',demoRevision:{take:1,version:2}},
+ 'demo:3':{date:'2026-11-04',duration:'00:01:00',type:'Demo',workType:'混音',demoName:'很长的作品名称<安全显示>&其他文字',demoRevision:{take:2,version:3}}
  })];
  state.data.projects[1].demoBucket=true;
  state.data=normalizeData(state.data);settings.showCalendar=false;clearRecordFilters();render();

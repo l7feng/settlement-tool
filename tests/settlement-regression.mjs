@@ -53,7 +53,7 @@ try {
   await transparency('no-preference');
   page.setDefaultTimeout(10000);
   page.on('pageerror', error => errors.push(error.message));
-  await page.goto(origin + '/settlement-workbench.html',{waitUntil:'domcontentloaded',timeout:30000});
+  await page.goto(origin + '/settlement-workbench-legacy.html',{waitUntil:'domcontentloaded',timeout:30000});
   const reset = async () => page.evaluate(data => {state.dataBlocked=false;state.collapsed={};state.calYear=null;state.calendarScope=null;state.selectedDate=null;state.cycle='natural';document.getElementById('cycleSelect').value='natural';settings.freezeLevel='full';settings.topCollapsed=[];settings.sideCollapsed={left:false,right:false};settings.sideWidths={left:180,right:300};setReducedMaterial(false);settings.topOpacity=0.88;settings.viewPreset='custom';delete settings.customWorkspace;saveSettings(settings);state.data = normalizeData(data);for(const id of ['gradeFilter','modeFilter','projFilter','monthFilter','epFilter','typeFilter','workFilter','billingFilter','dateStart','dateEnd']){const el=document.getElementById(id);if(el)el.value='';}settings.defaultSort='project';const sortModeEl=document.getElementById('sortMode');if(sortModeEl)sortModeEl.value='project';for(const e of allEpisodes())state.collapsed['X:'+periodKey(e.date)+'|'+e.proj.name]=false;const t2=document.getElementById('typeFilter');let d2=t2&&t2.closest('details');while(d2){d2.open=true;d2=d2.parentElement&&d2.parentElement.closest('details');}saveData(); render(); closeModal(); }, fixture());
   // 只跑名字命中 SETTLEMENT_ONLY 的用例（逗号分隔、按正则片段匹配），改一条验一条时省 3 分钟。
   const only = (process.env.SETTLEMENT_ONLY || '').split(',').map(x => x.trim()).filter(Boolean);
