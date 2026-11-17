@@ -714,10 +714,10 @@ body.reduce-material .filter-field,body.reduce-material .btn.secondary{backgroun
 @media(prefers-reduced-motion:reduce){button,.tab,.btn{transition:none!important;transform:none!important}}
 @supports not (backdrop-filter:blur(1px)){body .topbar,body .side-panel,body #workspaceContext,body.has-workspace-scroll .side-panel,body.has-workspace-scroll #workspaceContext{background:var(--white)!important}}
 
-/* 微调参数贯通功能层；滚动容器自身裁切，避免滚动条角落露出直角。 */
-#workArea>.content,.side-panel,#workspaceContext,#workspaceTop .topbar{border-radius:var(--material-radius,22px)!important}
-#workArea>.content{background:var(--bg);isolation:isolate;clip-path:inset(0 round var(--material-radius,22px))}
-.side-body{border-radius:0 0 var(--material-radius,22px) var(--material-radius,22px)}
+/* 微调参数贯通功能层；滚动容器自身裁切，避免滚动条角落露出直角。中央滚动区固定 22px，概览圆角旋钮只作用于卡片。 */
+#workArea>.content,.side-panel,#workspaceContext,#workspaceTop .topbar{border-radius:22px!important}
+#workArea>.content{background:var(--bg);isolation:isolate;clip-path:inset(0 round 22px)}
+.side-body{border-radius:0 0 22px 22px}
 .content::-webkit-scrollbar-track,.side-body::-webkit-scrollbar-track{border-radius:999px;margin-block:12px}
 .content::-webkit-scrollbar-corner,.side-body::-webkit-scrollbar-corner{background:transparent}
 body.glass-solid-header .topbar{background:var(--white)!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
@@ -1789,6 +1789,8 @@ function saveSettingsFromModal() {
   settings.style = 'glass';
   settings.favoriteThemes=readFavoriteThemes();
   saveSettings(settings);
+  // 冻结档位与折叠选择保存后立即生效：不等下一次 render/滚动才应用，否则用户会以为保存没成功。
+  applyTopPanelFreeze();
   document.documentElement.setAttribute('data-theme', settings.theme);
   document.documentElement.setAttribute('data-style', settings.style);
   window.setOverviewOpacity?.(settings.topOpacity);
@@ -3456,18 +3458,21 @@ function hasRecordFilters(){return ['monthFilter','projFilter','gradeFilter','mo
 function clearRecordFilters(){state.selectedDate=null;state.calYear=null;for(const id of ['monthFilter','projFilter','gradeFilter','modeFilter','epFilter','typeFilter','workFilter','billingFilter','dateStart','dateEnd'])document.getElementById(id).value='';render();}
 const PRESET_COLUMNS={entry:['epNo','proj','type','date','duration','work'],review:['epNo','proj','type','work','billing','date','duration','fee'],settlement:['epNo','proj','grade','type','billing','duration','mode','fee']};
 const WORKSPACE_PRESETS={entry:{label:'录入',freezeLevel:'header',topCollapsed:['cards','summary']},review:{label:'核对',freezeLevel:'header',topCollapsed:['cards','import']},settlement:{label:'结算',freezeLevel:'overview',topCollapsed:['actions','import','summary']}};
+// 真正滚动的是三栏容器 #workArea（.content 只是内容列，overflow:visible）；
+// 冻结、透明、滚动位置恢复都必须跟着这个容器走，否则滚动时状态永远不更新。
+function scrollArea(){return document.getElementById('workArea')||document.querySelector('.content');}
 function captureWorkspacePosition(){
- const content=document.querySelector('.content'),edge=Math.max(content.getBoundingClientRect().top,document.getElementById('workspaceContext').getBoundingClientRect().bottom);
+ const area=scrollArea(),content=document.querySelector('.content'),edge=Math.max(content.getBoundingClientRect().top,document.getElementById('workspaceContext').getBoundingClientRect().bottom);
  // 记录按纵向排列，二分定位首条可视行，避免逐条读取布局。
  const rows=document.querySelectorAll('.view.active .epchk');let low=0,high=rows.length;
  while(low<high){const mid=(low+high)>>1;if(rows[mid].closest('tr').getBoundingClientRect().bottom>edge)high=mid;else low=mid+1;}
  const checkbox=rows[low];
- return {left:content.scrollLeft,top:content.scrollTop,windowTop:window.scrollY,ref:checkbox?{project:checkbox.dataset.p,key:checkbox.dataset.e,y:checkbox.closest('tr').getBoundingClientRect().top}:null};
+ return {left:area.scrollLeft,top:area.scrollTop,windowTop:window.scrollY,ref:checkbox?{project:checkbox.dataset.p,key:checkbox.dataset.e,y:checkbox.closest('tr').getBoundingClientRect().top}:null};
 }
 function restoreWorkspacePosition(anchor){
- if(!anchor)return;const content=document.querySelector('.content');content.scrollLeft=anchor.left;
+ if(!anchor)return;const area=scrollArea();area.scrollLeft=anchor.left;
  const checkbox=anchor.ref&&[...document.querySelectorAll('.view.active .epchk')].find(el=>el.dataset.p===anchor.ref.project&&el.dataset.e===anchor.ref.key);
- if(checkbox){const delta=checkbox.closest('tr').getBoundingClientRect().top-anchor.ref.y;if(document.body.classList.contains('freeze-top'))content.scrollTop+=delta;else window.scrollBy(0,delta);}
+ if(checkbox){const delta=checkbox.closest('tr').getBoundingClientRect().top-anchor.ref.y;if(document.body.classList.contains('freeze-top'))area.scrollTop+=delta;else window.scrollBy(0,delta);}
  updateTopTransparency();
 }
 function applyViewPreset(name){
@@ -3544,7 +3549,8 @@ function toggleSidePanel(side){
 }
 let transparencyFrame=0,lastScrollState=null,lastTopOpacity='';
 function updateTopTransparency(){
-  const scrolling=document.querySelector('.content').scrollTop>2||window.scrollY>2;
+  const area=scrollArea();
+  const scrolling=area.scrollTop>2||window.scrollY>2;
   if(scrolling!==lastScrollState){document.body.classList.toggle('has-workspace-scroll',scrolling);lastScrollState=scrolling;}
   const opacity=Math.round((settings.topOpacity??0.88)*100)+'%';
   if(opacity!==lastTopOpacity){if(lastTopOpacity&&window.setOverviewOpacity)window.setOverviewOpacity(settings.topOpacity);document.documentElement.style.setProperty('--top-opacity',opacity);lastTopOpacity=opacity;}
@@ -3553,7 +3559,7 @@ function scheduleTopTransparency(){
   if(transparencyFrame)return;
   transparencyFrame=requestAnimationFrame(()=>{transparencyFrame=0;updateTopTransparency();});
 }
-document.querySelector('.content').addEventListener('scroll',scheduleTopTransparency,{passive:true});
+scrollArea().addEventListener('scroll',scheduleTopTransparency,{passive:true});
 window.addEventListener('scroll',scheduleTopTransparency,{passive:true});
 function showRecordDetails(projName,epNo){
   const e=allEpisodes().find(e=>e.proj.name===projName&&e.epNo===epNo);if(!e)return;

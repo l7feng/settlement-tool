@@ -24,4 +24,6 @@ body #topCards{gap:6px;padding:8px}body #topCards>.card{min-height:0!important;h
 body #topCards>.card:last-of-type{position:relative}#amountControls{display:inline-flex;margin:0 0 0 8px;vertical-align:middle}#cardFee{display:inline-block}.amount-eye{border:0!important;background:transparent!important;padding:4px!important;color:var(--muted)!important}.amount-eye svg{display:block}
 input[id$="_ranges"]::placeholder,input[id*="gradeRanges"]::placeholder{color:var(--muted);opacity:.8}
 `;document.head.appendChild(menuStyle);
-settings.freezeLevel='header';settings.topCollapsed=(settings.topCollapsed||[]).filter(k=>!['cards','summary','total','actions'].includes(k));applyTopPanelFreeze();menuLayout();
+// 启动时不再强行改写冻结档位与折叠选择（那会把用户设置和迁移结果抹成 header）；
+// 菜单只按当前设置挂载，布局由 applyTopPanelFreeze 按 settings 应用。
+applyTopPanelFreeze();menuLayout();
