@@ -845,6 +845,109 @@ td.record-project .record-project-revision{display:block;font-size:12px;color:va
 .action-section h3{font-size:14px;margin:8px 0}
 .action-scope{font-size:13px;color:var(--muted)}
 @media(max-width:1000px){.selection-actions{flex-basis:100%}}
+
+/* ═══ 布局 v2（2026-11-17 重构） ═══ */
+/* 汇总卡片：三连紧凑 */
+#topCards{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:10px}
+body #topCards > .card{height:88px;min-height:88px;max-height:88px;overflow:hidden;padding:8px 14px;display:flex;flex-direction:column;justify-content:flex-start;gap:1px;border-radius:14px;position:relative}
+#topCards .card .label{font-size:11.5px;color:var(--muted)}
+#topCards .card .value{font-size:23px;line-height:1.25;margin-top:1px;font-variant-numeric:tabular-nums}
+#topCards .card #lifetimeFee{margin-top:1px;font-size:11px}
+#topCards .card #historyRecords{margin-top:2px;padding:2px 7px;font-size:11px;width:max-content}
+
+/* 筛选 chips 行 */
+.chips-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-height:34px;padding:6px 2px 0}
+.chips-bar .chip{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 4px 0 10px;border-radius:999px;
+  border:1px solid color-mix(in srgb,var(--main) 45%,transparent);background:color-mix(in srgb,var(--main) 14%,transparent);
+  font-size:12px;color:var(--text)}
+.chips-bar .chip b{font-weight:600;color:var(--main)}
+.chips-bar .chip .x{width:18px;height:18px;border-radius:50%;display:grid;place-items:center;font-size:11px;color:var(--muted);cursor:pointer}
+.chips-bar .chip .x:hover{background:color-mix(in srgb,var(--main) 25%,transparent);color:var(--text)}
+.chips-bar .clr{font-size:12px;color:var(--muted);cursor:pointer;padding:2px 4px;border-radius:6px}
+.chips-bar .clr:hover{color:var(--text)}
+.chips-bar .chips-spacer{flex:1}
+.chips-bar .chip-scope{font-size:12px;color:var(--muted)}
+.chips-bar .chip-scope b{color:var(--text);font-weight:600}
+
+/* 拖拽区一行化 */
+#dropZone{display:flex;align-items:center;gap:12px;height:42px;padding:0 12px}
+#dropZone .drop-hint{flex:1;font-size:12.5px;color:var(--muted)}
+#dropZone .drop-actions{display:flex;gap:6px}
+#dropZone .drop-actions .btn{height:27px;padding:0 11px;font-size:12px}
+
+/* 右栏：标签在上、控件在下；常用靠上、低频成组 */
+#rightFilterBody .filter-bar .filter-field{display:flex;flex-direction:column;align-items:stretch;gap:5px;padding:0}
+#rightFilterBody .filter-bar .filter-field label{font-size:10.5px;letter-spacing:.4px;color:var(--muted);flex:none}
+#rightFilterBody .filter-bar .filter-field select,#rightFilterBody .filter-bar .filter-field input{width:100%!important;max-width:none!important;min-width:0;height:30px;font-size:13px}
+#rightFilterBody .filter-bar .search-field small{display:none}
+.side-more{border:1px solid var(--line);border-radius:10px;background:color-mix(in srgb,var(--input) 70%,transparent);padding:0 9px}
+.side-more summary{cursor:pointer;font-size:11.5px;color:var(--muted);padding:7px 0;list-style:none;display:flex;align-items:center;gap:6px}
+.side-more summary::-webkit-details-marker{display:none}
+.side-more summary:after{content:"▾";margin-left:auto;font-size:10px;color:var(--muted)}
+.side-more[open] summary:after{content:"▴"}
+.side-more .more-body{display:flex;flex-direction:column;gap:8px;padding:2px 0 9px}
+.side-more .more-body .filter-field{display:flex;flex-direction:column;gap:5px}
+.side-more .more-body .btn{height:27px;font-size:11.5px}
+.filter-foot{position:sticky;bottom:0;margin-top:8px;padding:9px 10px;border-top:1px solid var(--line);
+  background:color-mix(in srgb,var(--white) 88%,transparent);display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);border-radius:0 0 12px 12px}
+.filter-foot b{color:var(--text)}
+.filter-foot .clr{margin-left:auto;color:var(--main);cursor:pointer}
+
+/* 左栏分组标题 */
+.nav-cap{font-size:10.5px;letter-spacing:1.2px;color:var(--muted);margin:10px 0 2px 8px}
+.nav-cap:first-child{margin-top:2px}
+
+/* 日历概览条 */
+.cal-strip{border:1px solid var(--line);border-radius:14px;padding:8px 11px 10px;background:var(--white);margin:8px 0}
+.cal-strip[hidden]{display:none}
+.cal-strip .head{display:flex;align-items:center;gap:10px;margin-bottom:7px}
+.cal-strip .head .t{font-size:13px;font-weight:650}
+.cal-strip .head .meta{font-size:11.5px;color:var(--muted)}
+.cal-strip .head .spacer{flex:1}
+.cal-strip .head .btn{height:24px;font-size:11.5px;padding:0 9px}
+.cal-strip .days{display:grid;grid-template-columns:repeat(31,minmax(0,1fr));gap:4px}
+.cal-strip .d{height:40px;border-radius:7px;border:1px solid var(--line);background:color-mix(in srgb,var(--input) 60%,transparent);
+  position:relative;padding:3px 5px;font-size:10.5px;color:var(--muted);cursor:pointer}
+.cal-strip .d.has{background:color-mix(in srgb,var(--main) 14%,transparent);border-color:color-mix(in srgb,var(--main) 36%,transparent)}
+.cal-strip .d.today{outline:2px solid color-mix(in srgb,var(--warn,#ff9f5c) 60%,transparent);outline-offset:0}
+.cal-strip .d.selected{background:color-mix(in srgb,var(--main) 26%,transparent);border-color:var(--main)}
+.cal-strip .d .n{font-size:10px;color:var(--muted)}
+.cal-strip .d.has .n{color:var(--text)}
+.cal-strip .d .c{position:absolute;left:5px;bottom:3px;font-size:10px;color:var(--muted);display:flex;gap:3px;align-items:baseline}
+.cal-strip .d .c b{color:var(--text);font-weight:600;font-size:11px}
+.cal-strip .d .bar{position:absolute;left:5px;right:5px;bottom:14px;height:2px;border-radius:2px;background:color-mix(in srgb,var(--main) 55%,transparent)}
+
+/* 明细表更紧凑，给主任务让位 */
+#view-detail table th,#view-detail table td{padding:6px 9px;font-size:12.5px;line-height:1.35}
+#view-detail table tr:hover td{background:color-mix(in srgb,var(--main) 6%,transparent)}
+
+/* 顶部附属行压缩成细行（原布局里各占一整行） */
+#billingSummary{margin:2px 0 0;padding:4px 10px;font-size:11px;line-height:1.4;border-radius:10px;min-height:0}
+#filteredTotal{margin:2px 0 0;padding:2px 4px;font-size:11px;gap:10px;min-height:0}
+#filteredTotal .gt-item{font-size:11px}
+#dropZone{margin-top:4px}
+/* 右栏更紧凑 */
+.side-head{padding:8px 12px;font-size:12.5px}
+#rightFilterBody .filter-bar{gap:7px}
+#rightFilterBody .filter-bar .filter-field{gap:4px}
+#rightFilterBody .filter-bar .filter-field select,#rightFilterBody .filter-bar .filter-field input{height:29px}
+.side-group{margin:6px 0 0}
+.side-group summary{padding:4px 0;font-size:11.5px}
+.side-more{margin:2px 0 0}
+.filter-foot{margin-top:6px;padding:7px 9px}
+
+body #topCards > .card .value{font-size:21px;line-height:1.3;margin:0}
+body #topCards > .card #lifetimeFee{margin:1px 0 0;font-size:10.5px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:2px}
+body #topCards > .card #historyRecords{position:absolute;right:9px;top:8px;height:18px;padding:0 7px;margin:0;font-size:10px;line-height:1;border-radius:999px}
+body #topCards > .card:last-child{padding-right:112px}
+body #topCards > .card .label{font-size:11px;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* 卡片内子元素不参与收缩（否则 flex 会把标签压成 0 高） */
+body #topCards > .card > *{flex:0 0 auto}
+body #topCards > .card #amountControls{position:absolute;right:9px;bottom:6px;height:20px;margin:0;display:flex;align-items:center;gap:4px}
+body #topCards > .card #amountControls button{height:20px;padding:0 5px;font-size:10px;min-width:0;border-radius:6px}
+body #topCards > .card #amountControls svg{width:13px;height:13px}
+body #topCards > .card #lifetimeFee{padding-right:70px}
 </style>
 </head>
 <body>
@@ -869,6 +972,9 @@ td.record-project .record-project-revision{display:block;font-size:12px;color:va
   </div>
 </div>
 
+<!-- 筛选 chips（布局 v2） -->
+<div class="chips-bar" id="filterChips" aria-live="polite"></div>
+
 <!-- 汇总卡片 -->
 <div class="cards" id="topCards">
   <div class="card"><div class="label">工作记录数</div><div class="value" id="cardEps">—</div></div>
@@ -888,7 +994,11 @@ td.record-project .record-project-revision{display:block;font-size:12px;color:va
 <div id="billingSummary" class="review-summary" aria-live="polite"></div>
 <!-- 拖拽区 / 点击选文件夹 -->
 <div class="drop-zone" id="dropZone">
-  拖入WAV / MP4 / 文件夹或JSON备份 —— 识别后预览；点击选择交付文件夹
+  <span class="drop-hint">拖入 WAV / MP4 / 文件夹或 JSON 备份 —— 识别后预览，点「确认导入」落库</span>
+  <div class="drop-actions">
+    <button type="button" class="btn" onclick="event.stopPropagation();document.getElementById('folderInput').click()">选择文件</button>
+    <button type="button" class="btn secondary" onclick="event.stopPropagation();openRecordActions()">登记记录</button>
+  </div>
   <input type="file" id="folderInput" webkitdirectory directory multiple style="display:none">
 </div>
 <!-- 背景光斑（玻璃档显示；pixel 档 display:none） -->
@@ -947,7 +1057,7 @@ td.record-project .record-project-revision{display:block;font-size:12px;color:va
 <button class="btn danger" id="batchDelBtn" style="display:none" onclick="batchDeleteEps()">删除所选（<span id="selCount">0</span>）</button>
 </div></div>
 <div id="workspaceContext"><div class="workspace-controls"><button class="btn secondary" id="calendarToggle" aria-pressed="true" onclick="toggleCalendar()">隐藏日历</button><button class="btn secondary" id="calendarFilterButton" aria-haspopup="dialog" onclick="openCalendarFilters()">日历筛选</button><button class="btn secondary" id="recordSortButton" aria-haspopup="dialog" onclick="openRecordSort()">排序：按集数 ↑</button></div><div class="workspace-scope"><span id="presetNote"></span><span id="activeScope"></span></div></div>
-  <div id="scrollTopSections"></div><div id="calendarAux" class="calendar-panel"></div>
+  <div id="scrollTopSections"></div><div id="calendarStrip" class="cal-strip"></div><div id="calendarAux" class="calendar-panel"></div>
   <div class="view active" id="view-detail"></div>
   <div class="view" id="view-byProject"></div>
   <div class="view" id="view-byGrade"></div>
@@ -1378,6 +1488,100 @@ function calcSummary(periodOverride,dayOverride) {
   return SettlementQuery.summarize(list);
 }
 
+
+// ═══ 布局 v2：筛选 chips / 日历概览条 / 右栏分组（2026-11-17） ═══
+const FILTER_CHIP_DEFS=[
+  ['monthFilter','结算期',v=>periodLabel(v)],
+  ['projFilter','项目',v=>v],
+  ['billingFilter','计价',(v,el)=>el.selectedOptions?.[0]?.textContent||v],
+  ['epFilter','搜索',v=>v],
+  ['gradeFilter','等级',v=>v],
+  ['typeFilter','类型',v=>v],
+  ['workFilter','工作类型',v=>v],
+  ['modeFilter','计价方式',v=>v],
+];
+function clearOneFilter(id){
+  const el=document.getElementById(id);if(!el)return;
+  el.value='';if(id==='epFilter'){const v=document.getElementById('searchValue');if(v)v.hidden=true;}
+  render();
+}
+function updateFilterChips(){
+  const box=document.getElementById('filterChips');if(!box)return;
+  const chips=[];
+  for(const [id,label,text] of FILTER_CHIP_DEFS){
+    const el=document.getElementById(id);if(!el)continue;
+    const raw=(el.value||'').trim();if(!raw)continue;
+    let shown;try{shown=text(raw,el);}catch(e){shown=raw;}
+    chips.push(`<span class="chip"><b>${esc(label)} ${esc(shown)}</b><span class="x" role="button" tabindex="0" aria-label="移除${esc(label)}筛选" onclick="clearOneFilter('${id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();clearOneFilter('${id}')}">×</span></span>`);
+  }
+  const start=(document.getElementById('dateStart')?.value||'').trim();
+  const end=(document.getElementById('dateEnd')?.value||'').trim();
+  if(start||end){const txt=`${start||'…'} ~ ${end||'…'}`;chips.push(`<span class="chip"><b>日期 ${esc(txt)}</b><span class="x" role="button" tabindex="0" onclick="clearDateRange()">×</span></span>`);}
+  const list=getFilteredList();
+  const sum=SettlementQuery.summarize(list);
+  const scope=`<span class="chip-scope">工作明细 · <b>${sum.eps}</b> 条 · <b>${sum.min.toFixed(1)}</b> 分 · <b>¥${sum.fee.toLocaleString('zh-CN',{minimumFractionDigits:2})}</b></span>`;
+  box.innerHTML=(chips.length?chips.join('')+'<span class="clr" role="button" tabindex="0" onclick="clearRecordFilters()">清除全部</span>':'')+`<span class="chips-spacer"></span>`+scope;
+}
+function clearDateRange(){
+  for(const id of ['dateStart','dateEnd']){const el=document.getElementById(id);if(el)el.value='';}
+  render();
+}
+function renderCalendarStrip(list){
+  const box=document.getElementById('calendarStrip');if(!box)return;
+  const byDay={};for(const e of list){(byDay[e.date]=byDay[e.date]||[]).push(e);}
+  const latest=Object.keys(byDay).sort().pop()||localToday();
+  if(state.calYear==null||state.calMonth==null){const d=new Date(latest+'T00:00:00');state.calYear=d.getFullYear();state.calMonth=d.getMonth();}
+  const y=state.calYear,m=state.calMonth;
+  const daysInMonth=new Date(y,m+1,0).getDate();
+  const today=localToday();
+  let recorded=0,total=0,fee=0;
+  let cells='';
+  for(let d=1;d<=daysInMonth;d++){
+    const ds=`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const eps=byDay[ds]||[];const n=eps.length;
+    if(n){recorded++;total+=n;fee+=eps.reduce((a,e)=>a+e.fee,0);}
+    const cls=['d'];if(n)cls.push('has');if(ds===today)cls.push('today');if(ds===state.selectedDate)cls.push('selected');
+    cells+=`<div class="${cls.join(' ')}" data-date="${ds}" role="button" tabindex="0" aria-label="${ds}，${n}条" onclick="selectDay('${ds}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();selectDay('${ds}')}"><span class="n">${d}</span>${n?`<div class="bar"></div><span class="c"><b>${n}</b>条</span>`:''}</div>`;
+  }
+  box.innerHTML=`<div class="head"><button class="btn secondary" onclick="calNav(-1)">‹ 上月</button><span class="t">${y}年${m+1}月</span><button class="btn secondary" onclick="calNav(1)">下月 ›</button>
+    <span class="meta">${daysInMonth} 天 · 有记录 ${recorded} 天 · ${total} 条 · ¥${fee.toLocaleString('zh-CN',{minimumFractionDigits:2})}</span>
+    <span class="spacer"></span><button class="btn secondary" onclick="calendarToggleFromStrip()">展开完整日历</button></div><div class="days">${cells}</div>`;
+}
+function calendarToggleFromStrip(){settings.showCalendar=true;saveSettings(settings);render();}
+function updateFilterFoot(){
+  const foot=document.getElementById('filterFoot');if(!foot)return;
+  const values={};for(const id of (SettlementQuery?.FILTER_IDS||[])){const el=document.getElementById(id);values[id]=el?el.value:'';}
+  const n=(SettlementQuery?.hasAnyFilter?Object.values(values).filter(v=>String(v).trim()).length:0);
+  const sum=foot.querySelector('.foot-sum')||foot;
+  sum.innerHTML=n?`已选 <b>${n}</b> 项`:`未设筛选`;
+}
+function initLayoutV2(){
+  if(window.__layoutV2)return;window.__layoutV2=true;
+  const bar=document.getElementById('filterBar'),body=document.getElementById('rightFilterBody');
+  if(!bar||!body)return;
+  const lowIds=['typeFilter','workFilter','modeFilter','dateStart','dateEnd'];
+  const lows=lowIds.map(id=>document.getElementById(id)?.closest('.filter-field')).filter(Boolean);
+  const clearBtn=bar.querySelector('button[onclick*="clearRecordFilters"]');
+  const demoBtn=bar.querySelector('button[onclick*="quickFilterType"]');
+  if(lows.length&&!document.getElementById('moreFilters')){
+    const more=document.createElement('details');more.id='moreFilters';more.className='side-more';more.open=true;
+    more.innerHTML=`<summary>更多筛选 <span class="n">${lows.length+(demoBtn?1:0)}</span></summary><div class="more-body"></div>`;
+    bar.insertBefore(more,clearBtn||null);
+    const holder=more.querySelector('.more-body');
+    lows.forEach(f=>holder.appendChild(f));
+    if(demoBtn){const row=document.createElement('div');row.className='more-row';row.appendChild(demoBtn);holder.appendChild(row);}
+    if(clearBtn){clearBtn.className='btn secondary filter-clear';clearBtn.textContent='清空筛选';clearBtn.style.marginLeft='auto';}
+  }
+  if(!document.getElementById('filterFoot')){
+    const foot=document.createElement('div');foot.id='filterFoot';foot.className='filter-foot';foot.innerHTML='<span class="foot-sum">未设筛选</span>';
+    foot.appendChild(clearBtn||document.createElement('span'));
+    body.appendChild(foot);
+  }
+  const nav=document.getElementById('leftNavBody');
+  if(nav&&!nav.querySelector('.nav-cap')){const cap=document.createElement('div');cap.className='nav-cap';cap.textContent='视图';nav.prepend(cap);}
+  updateFilterChips();updateFilterFoot();
+}
+
 function render() {
   episodesMemo = null;                 // 每次重绘重新派生
   episodesMemoActive = true;
@@ -1404,9 +1608,12 @@ function render() {
   const filtered=displayedRecords();
   document.getElementById('filteredTotal').innerHTML=`<span class="gt-item">共计 <b>${filtered.length}</b> 条</span><span class="gt-item">共计时长 <b>${(filtered.reduce((sum,e)=>sum+e.sec,0)/60).toFixed(1)}</b> 分</span><span class="gt-item">共计金额 <b class="amt" id="filteredTotalAmount">¥${filtered.reduce((sum,e)=>sum+e.fee,0).toLocaleString('zh-CN',{minimumFractionDigits:2})}</b></span>`;
   const calendar=document.getElementById('calendarAux');
-  renderCalendar(getFilteredList({includeSuperseded:true}),calendar,false);calendar.hidden=!settings.showCalendar;
-  document.getElementById('calendarToggle').textContent=settings.showCalendar?'隐藏日历':'显示日历';
+  const calList=getFilteredList({includeSuperseded:true});
+  renderCalendar(calList,calendar,false);calendar.hidden=!settings.showCalendar;
+  renderCalendarStrip(calList);document.getElementById('calendarStrip').hidden=settings.showCalendar;
+  document.getElementById('calendarToggle').textContent=settings.showCalendar?'收起完整日历':'展开完整日历';
   document.getElementById('calendarToggle').setAttribute('aria-pressed',String(settings.showCalendar));
+  updateFilterChips();updateFilterFoot();
   renderDetail();
   renderByProject();
   renderByGrade();
@@ -1617,7 +1824,7 @@ function loadSettings(readOnly=false) {
  try{const old=JSON.parse(workspaceStorage.getItem(SET_KEY)||'{}');for(const key of ['uiFreezeRows','uiFreezeCols','freezeRows','freezeCols'])delete old[key];
  if(!['none','header','overview','actions','full'].includes(old.freezeLevel))old.freezeLevel=old.freezeTopPanel===false?'none':'full';
  const allowed=['cards','actions','summary','import','views','filters','total'];old.topCollapsed=Array.isArray(old.topCollapsed)?[...new Set(old.topCollapsed.filter(x=>allowed.includes(x)))]:[];
- old.recordSort=old.recordSort==='time'?'time':'episode';old.viewPreset='custom';old.delMode=false;old.showCalendar=old.showCalendar!==false;delete old.showCalendarRevisions;old.calendarFilters=normalizeCalendarFilters(old.calendarFilters);
+ old.recordSort=old.recordSort==='time'?'time':'episode';old.viewPreset='custom';old.delMode=false;old.showCalendar=old.showCalendar===true;delete old.showCalendarRevisions;old.calendarFilters=normalizeCalendarFilters(old.calendarFilters);
  old.favoriteThemes=Array.isArray(old.favoriteThemes)?[...new Set(old.favoriteThemes.filter(x=>['','paper','dark','claude','warm','ocean','forest','violet'].includes(x)).map(normalizeTheme))]:[];
  old.sideCollapsed={left:old.sideCollapsed?.left===true,right:old.sideCollapsed?.right===true};old.topOpacity=Math.max(0.55,Math.min(1,Number(old.topOpacity)||0.88));
  const next=Object.assign(defaults,old);next.freezeTopPanel=next.freezeLevel!=='none';if(!workspaceBootError&&!readOnly)workspaceStorage.setItem(SET_KEY,JSON.stringify(next));return next;
@@ -3947,5 +4154,6 @@ render();
 <script src="assets/ui-localization.js"></script>
 <script src="assets/ui-usability.js"></script>
 <script src="assets/project-workflows.js"></script>
+<script>document.addEventListener("DOMContentLoaded",()=>setTimeout(()=>{try{initLayoutV2();}catch(e){console.error(e);}},120));</script>
 </body>
 </html>

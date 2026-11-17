@@ -533,6 +533,7 @@ const before=await page.evaluate(()=>({data:JSON.stringify(state.data),cols:JSON
   const screenshotDir=resolve(evidenceDir,'upgrade');await mkdir(screenshotDir,{recursive:true});
   await reset();await page.screenshot({path:resolve(screenshotDir,'preview-main.png'),fullPage:true});
   await test('按项目与等级共享日历日期选择，整月恢复且级别按记录过滤',async()=>{
+    await page.evaluate(()=>{settings.showCalendar=true;render();});
     await page.evaluate(()=>{state.data.projects[0].episodes['1'].date='2026-10-10';state.data.projects[0].episodes['1'].grade='A';const sort=document.getElementById('sortMode');if(sort)sort.value='time';render();switchTab('byProject');});
     await page.locator('#calendarAux .cal-cell[data-date="2026-10-10"]').click();assert.equal(await page.locator('#view-byProject .record-group summary').count(),1);assert.ok((await page.locator('#view-byProject .record-group summary').textContent()).includes('1条'));
     await page.locator('#leftNavBody [data-view="byGrade"]').click();assert.equal(await page.locator('#calendarAux .cal-cell.selected').getAttribute('data-date'),'2026-10-10');assert.deepEqual(await page.locator('#view-byGrade [data-grade-count]').evaluateAll(els=>els.map(e=>Number(e.dataset.gradeCount))),[1,0,0,0]);
