@@ -1,3 +1,4 @@
+import {chromium} from './playwright-runtime.mjs';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
 import {readFile,writeFile,mkdir} from 'node:fs/promises';
@@ -7,7 +8,6 @@ import {Script} from 'node:vm';
 const web=process.env.SETTLEMENT_WEB_ROOT||'D:/Ai-Files/Tools/Html/settlement-tool';
 const out=process.env.SETTLEMENT_EVIDENCE||fileURLToPath(new URL('../build/ui-audit-20261028/ui/',import.meta.url));await mkdir(out,{recursive:true});
 for(const m of (await readFile(resolve(web,'settlement-workbench.html'),'utf8')).matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi))if(m[1].trim())new Script(m[1]);
-const {chromium}=await import(pathToFileURL('C:/Users/Administrator/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/index.mjs'));
 const server=createServer(async(req,res)=>{try{const file=resolve(web,'.'+new URL(req.url,'http://localhost').pathname);assert.ok(file.startsWith(resolve(web)+sep));res.setHeader('Content-Type',({'.html':'text/html;charset=utf-8','.js':'application/javascript','.svg':'image/svg+xml'}[extname(file)]||'application/octet-stream'));res.end(await readFile(file));}catch{res.writeHead(404);res.end();}});
 await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin='http://127.0.0.1:'+server.address().port;
 const browser=await chromium.launch({headless:true,executablePath:'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'}),context=await browser.newContext({viewport:{width:1440,height:1100},timezoneId:'Asia/Shanghai'});

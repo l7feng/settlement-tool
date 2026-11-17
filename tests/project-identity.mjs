@@ -1,3 +1,4 @@
+import {chromium} from './playwright-runtime.mjs';
 import {webRoot,webRootURL} from './web-root.mjs';
 // 项目显示与稳定身份专项：随机端口、合成数据、独立浏览器存储，最长 60 秒。
 import assert from 'node:assert/strict';
@@ -11,8 +12,7 @@ import {randomUUID,createHash} from 'node:crypto';
 const execFileAsync=promisify(execFile);
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const output=resolve(root,'build/identity-20261012');
-const runtime=process.env.SETTLEMENT_PLAYWRIGHT||'C:/Users/32112/.codex/visualizations/2026/10/11/01a12aa9-0081-7d52-aa44-6ba306a04d0b/ppt-runtime/gen-pptx/node_modules/playwright/index.mjs';
-const {chromium}=await import(pathToFileURL(runtime).href);
+
 const fixture=()=>({prices:Object.fromEntries(['A','B','C','D'].map(g=>[g,{per_min:10,per_ep:10}])),projects:[{name:'兔子新娘的秘密',aliases:['兔新旧名'],grade:'D',type:'正式',mode:'按集',path:'',episodes:{'1':{date:'2026-10-12',duration:'00:01:00',workType:'混音'},'2':{date:'2026-10-11',duration:'00:02:00',workType:'修改'}}},{name:'真千金归来',aliases:[],grade:'D',type:'正式',mode:'按集',episodes:{'1':{date:'2026-10-12',duration:'00:01:00',workType:'重混'}}}]});
 const server=createServer(async(req,res)=>{try{const p=resolve(webRoot,'.'+decodeURIComponent(new URL(req.url,'http://localhost').pathname));if(!p.startsWith(webRoot+sep))throw Error('越界');res.setHeader('Content-Type',extname(p)==='.html'?'text/html;charset=utf-8':'application/javascript');res.end(await readFile(p));}catch{res.writeHead(404);res.end();}});
 await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin=`http://127.0.0.1:${server.address().port}`;

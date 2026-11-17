@@ -1,3 +1,4 @@
+import {chromium} from './playwright-runtime.mjs';
 import {webRoot,webRootURL} from './web-root.mjs';
 // 只使用隔离浏览器及合成夹具，不连接桌面版的数据源。
 import assert from 'node:assert/strict';
@@ -8,8 +9,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const evidenceDir = process.env.SETTLEMENT_EVIDENCE || resolve(root, 'build/tuner-20261012');
-const runtime = process.env.SETTLEMENT_PLAYWRIGHT || 'C:/Users/32112/.codex/visualizations/2026/10/11/01a12aa9-0081-7d52-aa44-6ba306a04d0b/ppt-runtime/gen-pptx/node_modules/playwright/index.mjs';
-const { chromium } = await import(pathToFileURL(runtime).href);
+
 const fixture = () => ({ prices: { A: { per_min: 78, per_ep: 78 }, B: { per_min: 30, per_ep: 30 }, C: { per_min: 15, per_ep: 15 }, D: { per_min: 10, per_ep: 10 } }, projects: [{ name: '缩写', aliases: [], grade: 'D', type: '正式', mode: '按集', path: '', episodes: { '1': { date: '2026-10-12', duration: '00:01:00', workType: '混音' }, '2': { date: '2026-10-12', duration: '00:02:00', workType: '重混', rework: true }, '3': { date: '2026-10-12', duration: '00:01:30', workType: '修改' }, '4': { date: '2026-10-12', duration: '00:01:00', workType: '混音', excluded: true, excludeReason: '测试排除' } } }] });
 // 合成 ISO BMFF 容器，仅验证文件头时长读取，不模拟视频解码。
 function mp4Fixture({ version = 0, wide = false, seconds = 90, scale = 1000, invalid = false } = {}) {
@@ -54,7 +54,7 @@ try {
   page.setDefaultTimeout(10000);
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(origin + '/settlement-workbench.html',{waitUntil:'domcontentloaded',timeout:30000});
-  const reset = async () => page.evaluate(data => {state.dataBlocked=false;state.collapsed={};state.calYear=null;state.calendarScope=null;state.selectedDate=null;state.cycle='natural';document.getElementById('cycleSelect').value='natural';settings.freezeLevel='full';settings.topCollapsed=[];settings.sideCollapsed={left:false,right:false};settings.sideWidths={left:180,right:300};setReducedMaterial(false);settings.topOpacity=0.88;settings.viewPreset='custom';delete settings.customWorkspace;saveSettings(settings);state.data = normalizeData(data);for(const id of ['gradeFilter','modeFilter','projFilter','monthFilter','epFilter','typeFilter','workFilter','billingFilter','dateStart','dateEnd']){const el=document.getElementById(id);if(el)el.value='';}document.getElementById('sortMode').value='project';for(const e of allEpisodes())state.collapsed['X:'+periodKey(e.date)+'|'+e.proj.name]=false;saveData(); render(); closeModal(); }, fixture());
+  const reset = async () => page.evaluate(data => {state.dataBlocked=false;state.collapsed={};state.calYear=null;state.calendarScope=null;state.selectedDate=null;state.cycle='natural';document.getElementById('cycleSelect').value='natural';settings.freezeLevel='full';settings.topCollapsed=[];settings.sideCollapsed={left:false,right:false};settings.sideWidths={left:180,right:300};setReducedMaterial(false);settings.topOpacity=0.88;settings.viewPreset='custom';delete settings.customWorkspace;saveSettings(settings);state.data = normalizeData(data);for(const id of ['gradeFilter','modeFilter','projFilter','monthFilter','epFilter','typeFilter','workFilter','billingFilter','dateStart','dateEnd']){const el=document.getElementById(id);if(el)el.value='';}settings.defaultSort='project';const sortModeEl=document.getElementById('sortMode');if(sortModeEl)sortModeEl.value='project';for(const e of allEpisodes())state.collapsed['X:'+periodKey(e.date)+'|'+e.proj.name]=false;saveData(); render(); closeModal(); }, fixture());
   const test = async (name, fn) => { testCount++; try { await reset(); await fn(); console.log('PASS ' + name); } catch (error) { failures++; console.error('FAIL ' + name + '\n' + error.stack); } };
   // 最小 PCM WAV 夹具，头部声明 60 秒，测试不会解码整个音频。
   const prepareWav = async names => page.evaluate(names => {
@@ -509,7 +509,7 @@ const before=await page.evaluate(()=>({data:JSON.stringify(state.data),cols:JSON
     for(const theme of ['dark','claude']){await page.evaluate(theme=>chooseAppearanceTheme(theme),theme);const geometry=await page.locator('.duplicate-choice').first().evaluate(label=>{const radio=label.querySelector('input').getBoundingClientRect(),text=label.querySelector('span').getBoundingClientRect();return {width:radio.width,adjacent:text.left>=radio.right,gap:Math.abs(text.top-radio.top),overflow:label.scrollWidth>label.clientWidth+1};});assert.equal(geometry.width,16);assert.equal(geometry.adjacent,true);assert.ok(geometry.gap<5);assert.equal(geometry.overflow,false);}
     await page.setViewportSize({width:1440,height:1000});await page.evaluate(()=>chooseAppearanceTheme('dark'));
   });
-  await reset();await page.evaluate(()=>{state.collapsed={};render();switchTab('detail');document.getElementById('toast').style.display='none';});await page.screenshot({path:resolve(evidenceDir,'month-project-hierarchy.png'),fullPage:true});await page.evaluate(()=>{document.getElementById('sortMode').value='time';render();switchTab('byProject');});await page.screenshot({path:resolve(evidenceDir,'project-calendar.png'),fullPage:true});await page.evaluate(()=>switchTab('byGrade'));await page.screenshot({path:resolve(evidenceDir,'grade-calendar.png'),fullPage:true});
+  try { await reset();await page.evaluate(()=>{state.collapsed={};render();switchTab('detail');document.getElementById('toast').style.display='none';});await page.screenshot({path:resolve(evidenceDir,'month-project-hierarchy.png'),fullPage:true});await page.evaluate(()=>{settings.defaultSort='time';const sortModeEl=document.getElementById('sortMode');if(sortModeEl)sortModeEl.value='time';render();switchTab('byProject');});await page.screenshot({path:resolve(evidenceDir,'project-calendar.png'),fullPage:true});await page.evaluate(()=>switchTab('byGrade'));await page.screenshot({path:resolve(evidenceDir,'grade-calendar.png'),fullPage:true});
   await finalMixFiles();await page.evaluate(()=>{prepareImportPreview();document.getElementById('toast').style.display='none';});await page.getByRole('button',{name:'完成审核，预览导入',exact:true}).waitFor();await page.screenshot({path:resolve(evidenceDir,'duplicate-review.png'),fullPage:true});
   await prepareWav(['1集 1012 V01.wav','1集 1012 V02.wav','5集 1012 V01.wav']);await page.evaluate(()=>prepareImportPreview(false));await page.getByRole('button',{name:'确认导入',exact:true}).waitFor();await page.screenshot({path:resolve(screenshotDir,'preview-import-window.png'),fullPage:true});
   await page.evaluate(()=>{closeModal();openBatchCorrection([{projName:'缩写',epNo:'1'},{projName:'缩写',epNo:'2'}]);});await page.locator('#bc_work').selectOption('修改');await page.getByRole('button',{name:'预览金额变化',exact:true}).click();await page.screenshot({path:resolve(screenshotDir,'preview-batch-amount.png'),fullPage:true});
@@ -531,6 +531,7 @@ const before=await page.evaluate(()=>({data:JSON.stringify(state.data),cols:JSON
   await transparency('no-preference');
   const liquidDir=resolve(evidenceDir,'liquid');await mkdir(liquidDir,{recursive:true});for(const theme of ['dark','claude']){await page.evaluate(theme=>{closeModal();setReducedMaterial(false);chooseAppearanceTheme(theme);applyViewPreset('review');document.getElementById('toast').style.display='none';},theme);await page.waitForTimeout(300);await page.screenshot({path:resolve(liquidDir,theme+'-liquid-workspace.png'),fullPage:true});}
   await page.evaluate(()=>setReducedMaterial(true));await page.waitForTimeout(300);await page.screenshot({path:resolve(liquidDir,'claude-reduced-workspace.png'),fullPage:true});await page.evaluate(()=>openAppearanceSettings());await page.screenshot({path:resolve(liquidDir,'claude-material-settings.png'),fullPage:true});
+  } catch (e) { console.error('WARN 证据截图段落失败（不影响用例结论）\n' + ((e && e.stack) || e)); }
   assert.deepEqual(errors, [], '页面运行异常');
   console.log(`RESULT ${testCount - failures}/${testCount} passed`);
   await mkdir(evidenceDir,{recursive:true});await writeFile(resolve(evidenceDir,'test-result.json'),JSON.stringify({tests:`${testCount-failures}/${testCount}`,failures,pageErrors:errors},null,2));

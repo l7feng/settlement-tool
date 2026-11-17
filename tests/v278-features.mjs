@@ -1,3 +1,4 @@
+import {chromium} from './playwright-runtime.mjs';
 /* v2.7.8 专项：交付时间线显示、日历颜色、重复集数检查与登记/导入防重。 */
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
@@ -6,7 +7,6 @@ import {resolve,extname,sep} from 'node:path';
 import {pathToFileURL} from 'node:url';
 const web=process.env.SETTLEMENT_WEB_ROOT||'D:/Ai-Files/Tools/Html/settlement-tool';
 const out=process.env.SETTLEMENT_EVIDENCE||'D:/Ai-Files/Repos/GitHub/settlement-tool/build/v278/features';await mkdir(out,{recursive:true});
-const {chromium}=await import(pathToFileURL('C:/Users/Administrator/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/index.mjs'));
 const server=createServer(async(req,res)=>{try{const file=resolve(web,'.'+new URL(req.url,'http://localhost').pathname);assert.ok(file.startsWith(resolve(web)+sep));res.setHeader('Content-Type',({'.html':'text/html;charset=utf-8','.js':'application/javascript','.svg':'image/svg+xml'}[extname(file)]||'application/octet-stream'));res.end(await readFile(file));}catch{res.writeHead(404);res.end();}});
 await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin='http://127.0.0.1:'+server.address().port;
 const browser=await chromium.launch({headless:true,executablePath:'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'});

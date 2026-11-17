@@ -6,7 +6,7 @@ import threading
 import unittest
 from http.server import BaseHTTPRequestHandler,HTTPServer
 
-repo=Path(r'D:\Ai-Files\Repos\GitHub\settlement-tool')
+repo=Path(__file__).resolve().parent.parent
 sys.path.insert(0,str(repo/'src'))
 os.environ['SETTLEMENT_DATA_ROOT']=str(Path(__file__).parent.parent/'build/premium-20261022/reuse-test-data')
 spec=importlib.util.spec_from_file_location('desktop_app',repo/'src/desktop_app.py')

@@ -1,0 +1,34 @@
+function isStaircaseProject(p){return !!p&&projectUsesStaircase(p);}
+function staircaseItem(it){const p=state.data.projects.find(p=>p.name===it.projName),r=p?.episodes[it.epNo];return isStaircaseProject(p)&&(r?.type||p.type)!=='Demo';}
+function staircaseControls(){
+ const box=document.getElementById('modalBox');
+ const lock=(el,on,reason)=>{if(!el)return;el.disabled=on;el.title=on?reason:'';el.classList.toggle('staircase-locked',on);};
+ for(const prefix of ['pb','im']){const category=document.getElementById(prefix+'_category'),grade=document.getElementById(prefix+'_grade'),ranges=document.getElementById(prefix+'_ranges');if(!category||!grade)continue;const project=prefix==='pb'?state.data.projects.find(p=>p.name===window._billingProject):null;const on=category.value==='premium'&&(prefix!=='pb'||!project||projectUsesStaircase(project))&&document.getElementById(prefix+'_type')?.value!=='Demo';lock(grade,on,'由阶梯指定定级，请修改集数区间，不单独指定等级');const option=category.querySelector('[value="automation"]');if(option)option.disabled=on&&!!ranges?.value.trim();
+  if(ranges){let note=document.getElementById(prefix+'_staircaseNote');if(!note){note=document.createElement('small');note.id=prefix+'_staircaseNote';note.className='staircase-note';ranges.after(note);}const p=prefix==='pb'?state.data.projects.find(p=>p.name===window._billingProject):state.data.projects.find(p=>p.name===document.getElementById('im_proj')?.value);const text=on?(ranges.value.trim()?'当前阶梯：'+ranges.value.trim()+'；未指定区间=C':'默认：1=A，2-10=B，未指定区间=C') :'自动化仅D级';if(note.dataset.sourceText!==text){note.dataset.sourceText=text;note.textContent=text;}note.hidden=!on;}
+ }
+ const edit=window.staircaseEditProject,locked=!!document.getElementById('e_grade')&&isStaircaseProject(edit)&&document.getElementById('e_type')?.value!=='Demo';lock(document.getElementById('e_grade'),locked,'此项目由阶梯指定定级，请在项目计价方案中维护');if(locked&&edit.episodes[window.staircaseEditKey])document.getElementById('e_grade').value=SettlementBilling.grade(edit,{...edit.episodes[window.staircaseEditKey],type:'正式'});
+ const items=window._correctionItems||[];lock(document.getElementById('bc_grade'),items.some(staircaseItem),'所选包含阶梯项目，请到项目阶梯规则维护等级');
+ for(const el of box.querySelectorAll('select[id^="mi_"][id$="_grade"]')){const i=Number(el.id.split('_')[1]);lock(el,window._multiImport?.groups[i]?.billingCategory==='premium'&&window._multiImport.groups[i].type!=='Demo','精品剧按阶梯指定，默认等级仅内部兼容');}
+ if(window._multiImport?.preview)for(const el of box.querySelectorAll('select[data-import-grade][data-import-group]'))lock(el,_multiImport.preview.groups[Number(el.dataset.importGroup)]?.config.uiBillingCategory==='premium','按项目阶梯指定定级');
+ if(window._importPreview?.config?.billingCategory==='premium')box.querySelectorAll('select[data-import-grade]:not([data-import-group])').forEach(el=>lock(el,true,'按项目阶梯指定定级'));
+}
+const staircaseOriginalEdit=openEditEp;openEditEp=function(name,key){window.staircaseEditProject=state.data.projects.find(p=>p.name===name);window.staircaseEditKey=key;staircaseOriginalEdit(name,key);staircaseControls();};
+const staircaseOriginalBatch=buildBatchCorrection;buildBatchCorrection=function(items,patch){if(patch.grade!==undefined&&items.some(staircaseItem))throw Error('阶梯项目不支持单独改等级，请维护阶梯指定');const result=staircaseOriginalBatch(items,patch);if(patch.episodeNo!==undefined)for(const p of result.next.projects)if(isStaircaseProject(p))for(const r of Object.values(p.episodes)){const old=state.data.projects.flatMap(p=>Object.values(p.episodes)).find(e=>e.recordId===r.recordId);if(old&&old.episodeNo!==r.episodeNo)r.grade=gradeForNumber(p,r.episodeNo,r.grade||p.grade);}result.after=result.before+backupStats(result.next).amount-backupStats(state.data).amount;return result;};
+const staircaseOriginalCommit=commitDataChange;commitDataChange=function(next,label,preferences=null){
+ for(const p of next.projects)if(isStaircaseProject(p)){const old=state.data.projects.find(q=>q.id===p.id);if(!old)continue;for(const [key,r] of Object.entries(p.episodes)){if((r.type||p.type)==='Demo')continue;const before=Object.values(old.episodes).find(e=>e.recordId===r.recordId);if(!before||label.includes('恢复')||label.includes('导入')||label.includes('阶梯')||label.includes('计价方案'))continue;if((r.grade||p.grade)!==(before.grade||old.grade)){const changedNumber=r.episodeNo!==before.episodeNo,expected=gradeForNumber(p,r.episodeNo||key,before.grade||old.grade);if(!changedNumber||r.grade!==expected)return toast('此项目等级由阶梯指定，未保存单独改级'),false;}}}
+ return staircaseOriginalCommit(next,label,preferences);
+};
+document.getElementById('modalBox').addEventListener('input',staircaseControls);document.getElementById('modalBox').addEventListener('change',staircaseControls);
+new MutationObserver(()=>staircaseControls()).observe(document.getElementById('modalBox'),{childList:true,subtree:true});
+const staircaseStyle=document.createElement('style');staircaseStyle.textContent=`
+.staircase-note{display:block;color:var(--muted);font-size:12px;line-height:1.6;margin:6px 0;white-space:normal}
+select.staircase-locked,button:disabled{background:color-mix(in srgb,var(--white) 85%,var(--text) 15%)!important;color:var(--muted)!important;cursor:not-allowed!important;box-shadow:none!important}
+html:root body #topCards,html:root body #dropZone,html:root body .gui-panel{background:color-mix(in srgb,var(--white) var(--material-opacity,88%),transparent)!important;backdrop-filter:blur(var(--glass-blur,6px)) saturate(108%)!important;-webkit-backdrop-filter:blur(var(--glass-blur,6px)) saturate(108%)!important}
+html:root body #modalBox.modal,html:root body #calendarHover{background:color-mix(in srgb,var(--white) clamp(80%,calc(var(--material-opacity,88%) + 8%),98%),transparent)!important;backdrop-filter:blur(var(--glass-blur,6px))!important;-webkit-backdrop-filter:blur(var(--glass-blur,6px))!important}
+html:root body #topCards>.card,html:root body .gui-panel .side-group,html:root body .gui-panel .side-head,html:root body #calendarHover .calendar-work-card{background:color-mix(in srgb,var(--text) 3%,transparent)!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;box-shadow:none!important}
+html:root body #modalMask{background:rgba(0,0,0,.46)!important;backdrop-filter:none!important}
+html:root body.reduce-material #topCards,html:root body.reduce-material #dropZone,html:root body.reduce-material .gui-panel,html:root body.reduce-material #modalBox.modal,html:root body.reduce-material #calendarHover,html:root body.glass-solid-header #modalBox.modal,html:root body.glass-solid-header .gui-panel{background:var(--white)!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+@supports not (backdrop-filter:blur(1px)){html:root body #topCards,html:root body #dropZone,html:root body .gui-panel,html:root body #modalBox.modal,html:root body #calendarHover{background:var(--white)!important}}
+`;document.head.appendChild(staircaseStyle);
+
+render();

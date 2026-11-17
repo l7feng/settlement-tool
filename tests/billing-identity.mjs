@@ -13,9 +13,11 @@ const saved=a.projects[0].episodes[1].recordId;a.projects[0].name='改名';id.en
 assert.notEqual(id.newId('record'),id.newId('record'));
 a.projects[0].episodes[2]={...a.projects[0].episodes[1]};assert.throws(()=>id.ensure(a),/编号重复/);
 const prices={A:{per_ep:1.005,per_min:78}},project={grade:'A',mode:'按集'},record={duration:'00:00:37',workType:'混音'};
-assert.equal(billing.fee(prices,project,record),1.005);
+// 按集单价落账前收敛到分：1.005 → 1.01（浮点误差先修正再四舍五入）。
+assert.equal(billing.fee(prices,project,record),1.01);
+assert.equal(billing.fee({A:{per_ep:78.888,per_min:78}},project,record),78.89);
 assert.equal(billing.fee(prices,{...project,mode:'按时长'},record),48.1);
 assert.equal(billing.fee(prices,project,{...record,workType:'修改'}),0);
 assert.equal(billing.fee(prices,project,{...record,excluded:true}),0);
 assert.equal(billing.workType({workType:'首次制作'}),'混音');
-console.log('PASS 稳定编号、改名保号、随机新号、重复拒绝及旧计价口径');
+console.log('PASS 稳定编号、改名保号、随机新号、重复拒绝及按集取整、旧计价口径');

@@ -34,7 +34,7 @@ SPEC = os.path.join(ROOT, 'build')
 # staging：PyInstaller 先建到这里，再把内容整体移入 DIST（扁平化，无嵌套子目录）
 STAGING = os.path.join(ROOT, 'build', 'staging')
 ENTRY = os.path.join(ROOT, 'src', 'desktop_app.py')
-ICON = os.path.join(WEB_ROOT, 'assets', 'app.ico')
+ICON = os.path.join(WEB_ROOT, 'assets', 'icons', 'app.ico')
 
 # 打包后必须在 _internal 里存在的东西，缺一个 exe 就白屏或功能缺失
 MUST_HAVE = [

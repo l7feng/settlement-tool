@@ -1,3 +1,4 @@
+import {chromium} from './playwright-runtime.mjs';
 import {webRoot,webRootURL} from './web-root.mjs';
 // 工作区备份、升级保护与模拟同步 UI；仅隔离合成存储，60 秒上限。
 import assert from 'node:assert/strict';
@@ -6,7 +7,6 @@ import {readFile,mkdir,writeFile} from 'node:fs/promises';
 import {resolve,dirname,sep,extname} from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..'),output=resolve(root,'build/sync-20261012');
-const {chromium}=await import(pathToFileURL(process.env.SETTLEMENT_PLAYWRIGHT||'C:/Users/32112/.codex/visualizations/2026/10/11/01a12aa9-0081-7d52-aa44-6ba306a04d0b/ppt-runtime/gen-pptx/node_modules/playwright/index.mjs').href);
 const business={schemaVersion:3,prices:Object.fromEntries(['A','B','C','D'].map(g=>[g,{per_min:10,per_ep:10}])),projects:[{id:'project-ui',name:'合成短剧',shortName:'短剧',aliases:[],grade:'D',type:'正式',mode:'按集',path:'',episodes:{'1':{recordId:'record-ui',date:'2026-10-12',duration:'00:01:00',workType:'混音',excluded:false}}}]};
 const glass={schema:2,blur:3,radius:26,blob:1,hl:1,shadow:1,bars:1,alphaLight:.8,alphaDark:.9};
 const pref={formatVersion:1,settings:{theme:'dark',style:'glass',defaultSort:'time',freezeLevel:'header',viewPreset:'custom',sideCollapsed:{left:false,right:true},sideWidths:{left:220,right:360},topCollapsed:['cards'],settlementCycle:'half',topOpacity:.77,materialReduced:false},columns:{order:['fee','proj','epNo','grade','type','work','billing','date','duration','min','mode'],hidden:{min:true}},theme:'dark',glass};

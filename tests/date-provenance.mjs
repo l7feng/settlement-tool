@@ -1,3 +1,4 @@
+import {chromium} from './playwright-runtime.mjs';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
 import {readFile,writeFile,mkdir} from 'node:fs/promises';
@@ -6,7 +7,6 @@ import {pathToFileURL} from 'node:url';
 const deadline=setTimeout(()=>{console.error('统一界面检查超过60秒');process.exit(1);},60000);
 const web='D:/Ai-Files/Tools/Html/settlement-tool';
 const out=process.env.SETTLEMENT_EVIDENCE||'D:/Ai-Files/Repos/GitHub/settlement-tool/build/demo-20261023/date';
-const {chromium}=await import(pathToFileURL('C:/Users/Administrator/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/index.mjs'));
 const server=createServer(async(req,res)=>{try{const file=resolve(web,'.'+new URL(req.url,'http://localhost').pathname);assert.ok(file.startsWith(resolve(web)+sep));res.setHeader('Content-Type',({'.html':'text/html;charset=utf-8','.js':'application/javascript','.svg':'image/svg+xml'}[extname(file)]||'application/octet-stream'));res.end(await readFile(file));}catch{res.writeHead(404);res.end();}});
 await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin='http://127.0.0.1:'+server.address().port;
 const browser=await chromium.launch({headless:true,executablePath:'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'});

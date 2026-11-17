@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="icon" type="image/x-icon" href="assets/app.ico">
+<link rel="icon" type="image/x-icon" href="assets/icons/app.ico">
 <title>制作结算台</title>
 <!-- 依赖本地化：assets/ 与 html 同目录即可离线工作（exe 打包时随行） -->
 <script src="assets/desktop-workspace.js"></script>
@@ -146,7 +146,7 @@ body {
   position: sticky; top: 0; z-index: 100;
 }
 .topbar h1 { font-size: 18px; font-weight: 600; display:flex; align-items:center; gap:9px; }
-.topbar .brand-mark { width:28px; height:28px; flex:0 0 auto; }
+.topbar .brand-mark { height:34px; width:auto; flex:0 0 auto; }
 .topbar .right { display: flex; align-items: center; gap: 10px; }
 .topbar label { font-size: 13px; opacity: .85; }
 .topbar select {
@@ -155,6 +155,9 @@ body {
   padding: 4px 8px; border-radius: var(--radius-sm); font-size: 13px;
 }
 .topbar select option { color: var(--text); }
+/* ── 底部状态栏 ── */
+.statusbar { flex: 0 0 auto; display: flex; justify-content: flex-end; align-items: center; gap: 10px; padding: 5px 16px; font-size: 11.5px; color: var(--muted); }
+.status-version { font-variant-numeric: tabular-nums; white-space: nowrap; }
 /* ── 卡片 ── */
 .cards {
   display: grid;
@@ -859,7 +862,7 @@ td.record-project .record-project-revision{display:block;font-size:12px;color:va
 <div id="workspaceTop" role="region" aria-label="顶部工作区" tabindex="0">
 <!-- 顶栏 -->
 <div class="topbar" id="topHeader">
-  <h1><img class="brand-mark" src="assets/settlement.svg" alt="" aria-hidden="true">制作结算台</h1>
+  <h1><img class="brand-mark" src="assets/brand.png" alt="Settlement Tools" aria-hidden="true">制作结算台</h1>
   <div class="right">
     <label for="workspaceProfileSelect">账本</label>
     <select id="workspaceProfileSelect" aria-label="账本工作台" onchange="onWorkbenchSelect(this.value)"></select>
@@ -969,6 +972,7 @@ td.record-project .record-project-revision{display:block;font-size:12px;color:va
   </div>
 </aside>
 </div>
+<footer class="statusbar"><span class="status-version" id="statusVersion">制作结算台</span></footer>
 <!-- 弹窗占位 -->
 <div class="modal-mask" id="modalMask">
   <div class="modal" id="modalBox"></div>
@@ -989,9 +993,10 @@ td.record-project .record-project-revision{display:block;font-size:12px;color:va
 // ═══════════════════════════════════════════════════════
 // 数据层与多工作台支持
 // ═══════════════════════════════════════════════════════
-const APP_VERSION = '2.8.2';
+const APP_VERSION = '2.8.3';
+document.getElementById('statusVersion').textContent = '制作结算台 | v' + APP_VERSION;
 let activeProfileId = (function(){
-  try { return localStorage.getItem('settlement_active_profile') || 'default'; } catch(_) { return 'default'; }
+  try { return workspaceStorage.getItem('settlement_active_profile') || 'default'; } catch(_) { return 'default'; }
 })();
 
 function profileKey(base) {
@@ -1002,7 +1007,7 @@ function profileKey(base) {
 const WORKBENCH_KEY = 'settlement_workbenches_v1';
 function readWorkbenchList() {
   let list = [];
-  try { const raw = localStorage.getItem(WORKBENCH_KEY); if (raw) list = JSON.parse(raw); } catch(_) {}
+  try { const raw = workspaceStorage.getItem(WORKBENCH_KEY); if (raw) list = JSON.parse(raw); } catch(_) {}
   list = Array.isArray(list) ? list.filter(x => x && x.id && x.name).map(x => ({ id: String(x.id), name: String(x.name) })) : [];
   if (!list.length) {
     list = [{ id: 'default', name: '工作台1' }];
@@ -1024,7 +1029,7 @@ function readWorkbenchList() {
   });
 }
 function writeWorkbenchList(list) {
-  try { localStorage.setItem(WORKBENCH_KEY, JSON.stringify(list)); } catch(_) {}
+  try { workspaceStorage.setItem(WORKBENCH_KEY, JSON.stringify(list)); } catch(_) {}
 }
 let workbenchList = readWorkbenchList();
 function workbenchName(id) {
@@ -1113,7 +1118,7 @@ const dataRepository = {
 function switchWorkspaceProfile(id) {
   if (id === activeProfileId) return;
   activeProfileId = id;
-  try { localStorage.setItem('settlement_active_profile', id); } catch(_) {}
+  try { workspaceStorage.setItem('settlement_active_profile', id); } catch(_) {}
   // 撤销栈绑定账本；跨账本撤销会把旧账本整本写进新账本。
   dataUndoStack.length = 0;
   updateDataUndoUI();
@@ -1310,13 +1315,27 @@ async function readMediaDuration(file) {
 }
 
 function feeOf(proj, ep) { return SettlementBilling.fee(state.data.prices,proj,ep,state.data.premiumPrices); }
+// 不计价原因只认计价核心的枚举，界面各处不再各判一套（修改/手动排除/标记不计价/旧版本/Demo旧版/成片替换）。
+function exclusionText(ep){const key=SettlementBilling.exclusionReason(ep);return key?SettlementBilling.EXCLUSION_REASONS[key]:'';}
+// 阶梯项目里区间没覆盖到的记录：按项目默认等级兜底计价（不再算 0），这里集中统计并在汇总行提示补区间。
+function staircaseGapHint(){
+  let count=0;const names=[];
+  for(const p of state.data.projects){
+    if(!SettlementBilling.usesStaircase(p,{type:p.type}))continue;
+    let hit=0;
+    for(const r of Object.values(p.episodes))if(SettlementBilling.unmatched(p,r))hit++;
+    if(hit){count+=hit;names.push(p.name+' '+hit+'条（按'+SettlementBilling.fallbackLevel(p)+'级）');}
+  }
+  if(!count)return '';
+  return ` ｜ ⚠ ${count}条超出阶梯区间，已按项目默认等级兜底计价（${names.slice(0,3).join('、')}${names.length>3?' 等':''}），建议补全区间`;
+}
 function projectDisplayName(project){const text=(project.name).replace(/^《(.*)》$/,'$1');return '《'+text+'》';}
 function projectCell(project){return `<td class="record-project" title="${attrStr(project.name)}">${esc(projectDisplayName(project))}</td>`;}
 
 function allEpisodes() {
   const list=[];
   for(const proj of state.data.projects) for(const [epNo,ep] of Object.entries(proj.episodes)) {
-    list.push({proj,epNo,date:ep.date,duration:ep.duration,sec:t2sec(ep.duration),fee:feeOf(proj,ep),grade:SettlementBilling.grade(proj,ep),type:ep.type||proj.type,mode:ep.mode||proj.mode,rework:workTypeOf(ep)==='重混',workType:workTypeOf(ep),billable:isBillable(ep),excludeReason:ep.excludeReason||'',needsReview:!!ep.needsReview,multiVersion:!!ep.multiVersion,label:recordLabel(epNo,ep),priceBasis:ep.priceBasis||'delivery',note:ep.note||'',finalCut:ep.finalCut||null});
+    list.push({proj,epNo,date:ep.date,duration:ep.duration,sec:t2sec(ep.duration),fee:feeOf(proj,ep),grade:SettlementBilling.grade(proj,ep),type:ep.type||proj.type,mode:ep.mode||proj.mode,rework:workTypeOf(ep)==='重混',workType:workTypeOf(ep),billable:isBillable(ep),excludeReason:ep.excludeReason||'',excludeLabel:ep.excludeReason||exclusionText(ep),needsReview:!!ep.needsReview,multiVersion:!!ep.multiVersion,label:recordLabel(epNo,ep),priceBasis:ep.priceBasis||'delivery',note:ep.note||'',finalCut:ep.finalCut||null});
   }
   list.sort((a,b)=>a.date.localeCompare(b.date)||String(a.epNo).localeCompare(String(b.epNo),undefined,{numeric:true}));return list;
 }
@@ -1382,7 +1401,7 @@ function render() {
   document.getElementById('historyRecords').hidden=!hasRecordFilters();
   const s = calcSummary(cardPeriod,day);
   const billedAll=allEpisodes().filter(e=>e.billable),fcBilled=billedAll.filter(e=>e.priceBasis==='finalcut').length,dcBilled=billedAll.length-fcBilled;
-  document.getElementById('billingSummary').textContent = `工作记录：${s.types} ｜ 计价 ${s.billed}条 / ${s.billedMin.toFixed(1)}分钟 ｜ 不计价 ${s.excluded}条 ｜ 待核对 ${s.pending}条 ｜ 按成片 ${fcBilled} 集 / 按交付工程 ${dcBilled} 集`;
+  document.getElementById('billingSummary').textContent = `工作记录：${s.types} ｜ 计价 ${s.billed}条 / ${s.billedMin.toFixed(1)}分钟 ｜ 不计价 ${s.excluded}条 ｜ 待核对 ${s.pending}条 ｜ 按成片 ${fcBilled} 集 / 按交付工程 ${dcBilled} 集` + staircaseGapHint();
   document.getElementById('cardEps').innerHTML = s.eps+'<small class="stat-unit">条</small>';
   document.getElementById('cardMin').innerHTML = s.min.toFixed(1)+'<small class="stat-unit">分钟</small>';
   document.getElementById('cardFee').textContent = '¥' + s.fee.toLocaleString('zh-CN',{minimumFractionDigits:2})+'元';
@@ -1588,7 +1607,7 @@ function epCellHtml(e, key) {
  case 'grade':return `<td>${esc(e.grade)}</td>`;
  case 'type':return `<td>${esc(e.type)}</td>`;
  case 'work':return `<td class="${workTypeClass(e.workType)}">${esc(e.workType)}${e.needsReview?' · 待核对':''}</td>`;
- case 'billing':return `<td title="${esc(e.excludeReason||(!e.billable?'手动排除':''))}">${e.billable?'计价':'不计价'}</td>`;
+ case 'billing':return `<td title="${esc(e.excludeLabel||(e.billable?'':'不计价'))}">${e.billable?'计价':'不计价'}</td>`;
  case 'date':return `<td>${esc(e.date)}</td>`;
  case 'duration':return `<td>${settings.durationDisplay==='minutes'?(e.sec/60).toFixed(2):esc(e.duration)}</td>`;
  case 'version':return `<td>${recordVersionLabel(e.proj.episodes[e.epNo],e.proj)}</td>`;
@@ -2444,7 +2463,7 @@ function syncCategoryGrade(prefix){const p={billingCategory:document.getElementB
 function parseGradeRanges(text,grades=['A','B','C','D']){
  const rules=[];if(!text.trim())return rules;for(const chunk of text.split(/[,，;；]/)){const m=chunk.trim().match(/^(\d+)(?:-(\d+))?=([ABCD])$/i);if(!m||!grades.includes(m[3].toUpperCase())||!Number.isSafeInteger(Number(m[1]))||!Number.isSafeInteger(Number(m[2]||m[1]))||Number(m[1])<1||Number(m[1])>Number(m[2]||m[1]))throw Error('阶梯格式如1-5=A,6-10=B；等级限'+grades.join('/'));const r={lo:Number(m[1]),hi:Number(m[2]||m[1]),grade:m[3].toUpperCase()};if(rules.some(x=>r.lo<=x.hi&&r.hi>=x.lo))throw Error('阶梯集数范围不能重叠');rules.push(r);}return rules;
 }
-function gradeForNumber(p,no,fallback=p.grade){if(projectUsesStaircase(p))return SettlementBilling.grade(p,{episodeNo:String(no),type:'正式'});return parseGradeRanges(p.gradeRanges||'',allowedGrades(p)).find(r=>/^\d+$/.test(String(no))&&Number(no)>=r.lo&&Number(no)<=r.hi)?.grade||fallback;}
+function gradeForNumber(p,no,fallback=p.grade){if(projectUsesStaircase(p))return SettlementBilling.grade(p,{episodeNo:String(no),type:'正式'})??fallback;return parseGradeRanges(p.gradeRanges||'',allowedGrades(p)).find(r=>/^\d+$/.test(String(no))&&Number(no)>=r.lo&&Number(no)<=r.hi)?.grade||fallback;}
 function openProjectBilling(name){
  const p=state.data.projects.find(p=>p.name===name);window._billingProject=name;window._billingPreview=null;
  openModal(`<h2>计价方案 · ${esc(name)}</h2><div class="form-row"><label for="pb_mode">项目计价方式</label><select id="pb_mode"><option value="按时长">按时长</option><option value="按集">按集</option></select></div><div class="form-row"><label for="pb_category">制作类别</label><select id="pb_category" onchange="syncCategoryGrade('pb');window._billingPreview=null"><option value="premium">精品剧（ABC阶梯制）</option><option value="automation">自动化（D）</option></select></div><div class="form-row"><label for="pb_grade">默认等级</label><select id="pb_grade"></select></div><div class="form-row"><label for="pb_ranges">阶梯指定</label><input id="pb_ranges" value="${esc(p.gradeRanges||'')}" placeholder="例如1-5=A,6-10=B,11-80=C"></div><p class="review-hint">修改项目计价方式（按时长/按集）将作为新导入及默认依据；更新时可同步该项目下记录。</p><p id="pb_result" role="status"></p><div class="modal-actions"><button class="btn secondary" onclick="previewProjectBilling()">预览金额</button><button class="btn" id="pb_apply" disabled onclick="applyProjectBilling()">确认更新</button><button class="btn secondary" onclick="closeModal()">取消</button></div>`);

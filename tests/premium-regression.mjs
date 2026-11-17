@@ -1,3 +1,4 @@
+import {chromium} from './playwright-runtime.mjs';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
 import {readFile,writeFile,mkdir} from 'node:fs/promises';
@@ -6,7 +7,6 @@ import {pathToFileURL,fileURLToPath} from 'node:url';
 import {Script} from 'node:vm';
 const web=process.env.SETTLEMENT_WEB_ROOT||'D:/Ai-Files/Tools/Html/settlement-tool';
 const output=process.env.SETTLEMENT_EVIDENCE||fileURLToPath(new URL('../build/ui-audit-20261028/premium/',import.meta.url));
-const {chromium}=await import(pathToFileURL(process.env.SETTLEMENT_PLAYWRIGHT||'C:/Users/Administrator/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/index.mjs'));
 await mkdir(output,{recursive:true});
 const source=await readFile(resolve(web,'settlement-workbench.html'),'utf8');
 let scripts=0;for(const match of source.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)){if(match[1].trim()){new Script(match[1]);scripts++;}}

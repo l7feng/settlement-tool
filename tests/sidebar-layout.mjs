@@ -1,3 +1,4 @@
+import {chromium} from './playwright-runtime.mjs';
 import {webRoot,webRootURL} from './web-root.mjs';
 // 侧栏几何与搜索可访问性回归：随机本地端口、合成数据、独立存储。
 import assert from 'node:assert/strict';
@@ -7,8 +8,7 @@ import {resolve,dirname,sep,extname} from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const output=resolve(root,'build/sidebar-20261012');
-const runtime=process.env.SETTLEMENT_PLAYWRIGHT||'C:/Users/32112/.codex/visualizations/2026/10/11/01a12aa9-0081-7d52-aa44-6ba306a04d0b/ppt-runtime/gen-pptx/node_modules/playwright/index.mjs';
-const {chromium}=await import(pathToFileURL(runtime).href);
+
 const data={prices:Object.fromEntries(['A','B','C','D'].map(g=>[g,{per_min:10,per_ep:10}])),projects:[{name:'合成项目',grade:'D',type:'正式',mode:'按集',episodes:Object.fromEntries(Array.from({length:40},(_,i)=>[String(i+1),{date:'2026-10-12',duration:'00:01:00',workType:'混音'}]))}]};
 const server=createServer(async(req,res)=>{try{const p=resolve(webRoot,'.'+decodeURIComponent(new URL(req.url,'http://localhost').pathname));if(!p.startsWith(webRoot+sep))throw Error('越界');res.setHeader('Content-Type',extname(p)==='.html'?'text/html;charset=utf-8':'application/javascript');res.end(await readFile(p));}catch{res.writeHead(404);res.end();}});
 await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin=`http://127.0.0.1:${server.address().port}`;

@@ -1,3 +1,4 @@
+import {chromium} from './playwright-runtime.mjs';
 /* v2.7.8：旧版本重新导入后应保留（日历显示交付+修改），且不产生重复计费。 */
 import {createServer} from 'node:http';
 import {readFile,mkdir} from 'node:fs/promises';
@@ -8,7 +9,6 @@ const out='D:/Ai-Files/Repos/GitHub/settlement-tool/build/v278';
 await mkdir(out,{recursive:true});
 const server=createServer(async(req,res)=>{try{const file=resolve(web,'.'+new URL(req.url,'http://localhost').pathname);res.setHeader('Content-Type',({'.html':'text/html;charset=utf-8','.js':'application/javascript'}[extname(file)]||'application/octet-stream'));res.end(await readFile(file));}catch{res.writeHead(404);res.end();}});
 await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin='http://127.0.0.1:'+server.address().port;
-const {chromium}=await import(pathToFileURL('C:/Users/Administrator/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/index.mjs'));
 const browser=await chromium.launch({headless:true,executablePath:'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'});
 const context=await browser.newContext({viewport:{width:1440,height:1100},timezoneId:'Asia/Shanghai'});
 await context.route('**/*',r=>r.request().url().startsWith(origin+'/')?r.continue():r.abort());

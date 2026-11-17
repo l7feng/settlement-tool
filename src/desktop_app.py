@@ -25,6 +25,8 @@ import ctypes.wintypes as wt
 import functools
 import hashlib
 import json
+import logging
+import logging.handlers
 import secrets
 from workspace_store import WorkspaceStore
 import http.server
@@ -35,6 +37,7 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.parse
 import urllib.request
 
 import webview
@@ -81,6 +84,46 @@ def data_dir():
 
 
 # ═══════════════════════════════════════════════════════
+# 文件日志：exe 是窗口程序，没有控制台；出问题只能靠数据目录里的日志
+# ═══════════════════════════════════════════════════════
+LOGGER = logging.getLogger('settlement')
+
+
+def setup_logging():
+    """写 <数据目录>/logs/app.log，单文件 1MB × 3 份滚动。失败不影响启动。"""
+    try:
+        handler = logging.handlers.RotatingFileHandler(
+            os.path.join(log_dir(), 'app.log'), maxBytes=1_000_000, backupCount=3, encoding='utf-8')
+        handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(message)s'))
+        LOGGER.addHandler(handler)
+        LOGGER.setLevel(logging.INFO)
+        LOGGER.propagate = False
+    except Exception as error:                       # 日志本身不能挡住启动
+        print('[log] 日志初始化失败:', error)
+
+
+def log_dir():
+    d = os.path.join(data_dir(), 'logs')
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
+def log(*parts, level=logging.INFO):
+    """进日志文件；同时在有控制台时回显（窗口程序没有控制台，文件是唯一线索）。"""
+    text = ' '.join(str(p) for p in parts)
+    try:
+        LOGGER.log(level, text)
+    except Exception:
+        pass
+    if os.environ.get('SETTLEMENT_LOG_ECHO', 'auto') != '0':
+        try:
+            if sys.stdout and (os.environ.get('SETTLEMENT_LOG_ECHO') == '1' or sys.stdout.isatty()):
+                print(text)
+        except Exception:
+            pass
+
+
+# ═══════════════════════════════════════════════════════
 # 内置页面服务（http://127.0.0.1:固定端口）
 # ═══════════════════════════════════════════════════════
 class _Handler(http.server.SimpleHTTPRequestHandler):
@@ -119,7 +162,17 @@ class _Handler(http.server.SimpleHTTPRequestHandler):
             if route == '/__workspace_legacy__':
                 self.server.workspace.preserve_legacy(value['storage'])
                 return self._json(200, {'ok': True})
-            saved = self.server.workspace.save(value['revision'], value['storage'])
+            if 'storage' in value:
+                saved = self.server.workspace.save(value['revision'], value['storage'])
+            elif value.get('action') == 'delete-ledger':
+                # 删除账本是一个独立动作：只接受「恰好一个业务键」的删除请求，
+                # 避免普通增量写入顺手把账本删空。
+                changes = value.get('patch')
+                if not isinstance(changes, dict) or len(changes) != 1:
+                    raise ValueError('删除账本请求无效')
+                saved = self.server.workspace.patch(value['revision'], changes, allow_business_delete=True)
+            else:
+                saved = self.server.workspace.patch(value['revision'], value['patch'])
             return self._json(200, saved)
         except Exception as error:
             return self._json(409, {'error': str(error)})
@@ -135,6 +188,22 @@ class _Handler(http.server.SimpleHTTPRequestHandler):
                 return self._json(200, saved)
             except Exception as error:
                 return self._json(409, {'error': str(error)})
+        if route == '/__upgrade_blob__':
+            # 升级前快照原文搬出账本后，导出时按索引名取回（名字过白名单，杜绝路径穿越）。
+            if not self._authorized():
+                return self._json(403, {'error': '工作区请求未授权'})
+            try:
+                params = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+                text = self.server.workspace.read_upgrade_blob((params.get('file') or [''])[0])
+                body = text.encode('utf-8')
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json; charset=utf-8')
+                self.send_header('Content-Length', str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            except Exception as error:
+                return self._json(404, {'error': str(error)})
+            return
         if route == '/assets/desktop-workspace.js':
             raw = ("window.__settlementWorkspaceToken=" + json.dumps(WORKSPACE_TOKEN) + ";\n").encode('utf-8')
             with open(os.path.join(self.directory, 'assets', 'desktop-workspace.js'), 'rb') as stream:
@@ -195,10 +264,24 @@ def start_page_server(root):
             srv = _Server(('127.0.0.1', port), handler)
         except OSError:
             if _ping(port):
-                print('[server] 端口 %d 上已有本工具实例，直接复用' % port)
+                log('[server] 端口 %d 上已有本工具实例，直接复用' % port)
                 return None, port
             continue
         srv.workspace = WorkspaceStore(data_dir())
+        # 启动时把升级前快照原文搬出账本（幂等）：现役账本 5.96MB 里有 3.91MB 是 20 份内联快照。
+        try:
+            if srv.workspace.migrate_upgrades():
+                log('[server] 已把升级前快照原文搬到 upgrade/ 目录')
+        except Exception as error:
+            log('[server] 快照外置跳过：%s' % error)
+        # 数据目录自清洁（白名单+保留最新 N 份，逐条写日志）
+        try:
+            import data_hygiene
+            result = data_hygiene.run(data_dir(), log=log)
+            if result['files']:
+                log('[clean] 本次清理 %d 项，释放 %.1f MB' % (result['files'], result['bytes'] / 1048576))
+        except Exception as error:
+            log('[clean] 清理跳过：%s' % error)
         threading.Thread(target=srv.serve_forever, daemon=True).start()
         return srv, port
     raise OSError('端口 %d~%d 全被占用，无法启动页面服务' % (PORT_BASE, PORT_BASE + PORT_RANGE - 1))
@@ -314,7 +397,7 @@ def _probe_pywebview(window, state):
     n, ratio = distinct_colors(APP_NAME)
     state['colors'] = n
     state['ok'] = (n >= MIN_DISTINCT_COLORS) and (ratio <= MAX_TOP_RATIO)
-    print('[probe] 客户区颜色种类 = %s，最主色占比 %.0f%% → %s'
+    log('[probe] 客户区颜色种类 = %s，最主色占比 %.0f%% → %s'
           % (n, ratio * 100, '正常' if state['ok'] else '未渲染（黑屏/白屏/纯底色）'))
     if not state['ok']:
         try:
@@ -329,6 +412,10 @@ def _probe_pywebview(window, state):
 class Api(object):
     """暴露给网页的原生能力（window.pywebview.api.*，仅方案 1 存在）"""
 
+    # 网页只允许导出这几类文件；不在白名单内的名字直接拒绝，避免被当成任意写盘入口。
+    EXPORT_EXTENSIONS = frozenset(('.json', '.csv', '.xlsx', '.xls', '.txt', '.md', '.zip'))
+    MAX_EXPORT_BYTES = 256 * 1024 * 1024
+
     def app_info(self):
         return {'version': VERSION, 'dataDir': data_dir(), 'mode': 'pywebview'}
 
@@ -340,12 +427,37 @@ class Api(object):
             subprocess.Popen(['explorer', path])
         return path
 
+    @classmethod
+    def safe_export_name(cls, name):
+        """只取文件名部分并校验扩展名；拒绝路径分隔符、盘符、控制字符与空名。"""
+        text = name if isinstance(name, str) else ''
+        text = text.replace('\\', '/').split('/')[-1]          # 去掉任何目录部分
+        if any(ch < ' ' or ch == '\x7f' for ch in text):
+            raise ValueError('导出文件名无效')
+        text = text.strip()
+        stem, ext = os.path.splitext(text)
+        if not stem.strip(' .') or not ext:
+            raise ValueError('导出文件名无效')
+        if ext.lower() not in cls.EXPORT_EXTENSIONS:
+            raise ValueError('不支持的导出文件类型：%s' % ext)
+        if len(text) > 120:
+            text = stem[:120 - len(ext)] + ext
+        return text
+
     def save_file(self, name, b64):
         """网页 Blob 下载兜底：弹原生保存对话框，失败则落到数据目录。"""
         try:
             raw = base64.b64decode(b64)
         except Exception as e:
-            print('[save_file] base64 解码失败:', e)
+            log('[save_file] base64 解码失败:', e)
+            return ''
+        if len(raw) > self.MAX_EXPORT_BYTES:
+            log('[save_file] 文件过大，已拒绝:', len(raw))
+            return ''
+        try:
+            name = self.safe_export_name(name)
+        except ValueError as e:
+            log('[save_file] 文件名被拒绝:', e)
             return ''
 
         path = ''
@@ -361,7 +473,7 @@ class Api(object):
             if res:
                 path = str(res)
         except Exception as e:
-            print('[save_file] 保存对话框不可用，改用数据目录:', e)
+            log('[save_file] 保存对话框不可用，改用数据目录:', e)
 
         if not path:
             path = os.path.join(data_dir(), name)
@@ -375,7 +487,7 @@ class Api(object):
             with open(path, 'wb') as f:
                 f.write(raw)
         except Exception as e:
-            print('[save_file] 写入失败:', e)
+            log('[save_file] 写入失败:', e)
             return ''
         return path
 
@@ -399,7 +511,7 @@ def run_pywebview(url):
     storage = os.path.join(data_dir(), 'webview-data')
     os.makedirs(storage, exist_ok=True)
     webview.start(private_mode=False, storage_path=storage, gui='edgechromium',
-                  icon=os.path.join(resource_dir(), 'assets', 'app.ico'))
+                  icon=os.path.join(resource_dir(), 'assets', 'icons', 'app.ico'))
 
     if 'ok' not in state:          # 探针还没跑完用户就关了窗 → 当作正常使用
         return True
@@ -429,7 +541,7 @@ def run_browser_app(url):
     """Edge --app 模式。阻塞到浏览器窗口关闭为止。返回是否成功启动。"""
     exe = find_edge() or find_chrome()
     if not exe:
-        print('[失败] 未找到 Edge / Chrome，无法启动应用窗口')
+        log('[失败] 未找到 Edge / Chrome，无法启动应用窗口')
         return False
     profile = os.path.join(data_dir(), 'edge-profile')
     os.makedirs(profile, exist_ok=True)
@@ -441,7 +553,7 @@ def run_browser_app(url):
         '--no-first-run',
         '--no-default-browser-check',
     ]
-    print('[fallback] 启动应用窗口: %s' % exe)
+    log('[fallback] 启动应用窗口: %s' % exe)
     p = subprocess.Popen(cmd)
     p.wait()
     return True
@@ -449,24 +561,38 @@ def run_browser_app(url):
 
 # ═══════════════════════════════════════════════════════
 def main():
+    setup_logging()
+    # 未捕获异常也要落盘：窗口程序闪退时没有控制台，日志是唯一证据。
+    def _hook(kind, value, tb):
+        try:
+            LOGGER.error('未捕获异常（%s）', kind, exc_info=(type(value), value, tb))
+            log('[崩溃] %s: %s' % (kind, value), level=logging.ERROR)
+        except Exception:
+            pass
+    sys.excepthook = lambda kind, value, tb: _hook('excepthook', value, tb)
+    try:
+        threading.excepthook = lambda arg: _hook('threading', arg.exc_value, arg.exc_traceback)
+    except Exception:
+        pass
+    log('[启动] 版本 %s，数据目录 %s' % (VERSION, data_dir()))
     root = resource_dir()
     html = os.path.join(root, 'settlement-workbench.html')
     if not os.path.isfile(html):
-        print('[失败] 找不到页面文件: %s' % html)
+        log('[失败] 找不到页面文件: %s' % html)
         return 1
 
     try:
         _srv, port = start_page_server(root)
     except OSError as e:
-        print('[失败] %s' % e)
+        log('[失败] %s' % e)
         return 1
     url = page_url(port)
-    print('[server] %s' % url)
+    log('[server] %s' % url)
 
     if run_pywebview(url):
         return 0
 
-    print('[fallback] WebView2 未渲染，转 Edge --app 模式')
+    log('[fallback] WebView2 未渲染，转 Edge --app 模式')
     return 0 if run_browser_app(url) else 1
 
 
