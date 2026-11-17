@@ -4,11 +4,10 @@ import vm from 'node:vm';
 import {readFile} from 'node:fs/promises';
 
 const html=await readFile(new URL('settlement-workbench.html',webRootURL),'utf8');
-const match=html.match(/function periodRange\(key\) \{[\s\S]*?\n\}/);
-assert.ok(match,'periodRange 必须定义在页面里（S2-2.7 导出起止日期依赖它）');
-const context=vm.createContext({});
-vm.runInContext(match[0]+'\nthis.periodRange=periodRange;',context);
-const periodRange=context.periodRange;
+const core=await readFile(new URL('assets/query-core.js',webRootURL),'utf8');
+const context=vm.createContext({window:{}});
+vm.runInContext(core,context);
+const periodRange=context.window.SettlementQuery.periodRange;
 
 // 自然月：当月首日 → 当月最后一天（含闰年 2 月）
 assert.deepEqual({...periodRange('2026-10')},{start:'2026-10-01',end:'2026-10-31'});

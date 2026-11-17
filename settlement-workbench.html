@@ -975,6 +975,7 @@ td.record-project .record-project-revision{display:block;font-size:12px;color:va
 <script src="assets/revision-parse.js"></script>
 <script src="assets/exclusion-rules.js"></script>
 <script src="assets/billing-core.js"></script>
+<script src="assets/query-core.js"></script>
 <script src="assets/rate-snapshot.js"></script>
 <script src="assets/version-timeline.js"></script>
 <script src="assets/import-history.js"></script>
@@ -1326,12 +1327,18 @@ function unratedHint(){
 function projectDisplayName(project){const text=(project.name).replace(/^《(.*)》$/,'$1');return '《'+text+'》';}
 function projectCell(project){return `<td class="record-project" title="${attrStr(project.name)}">${esc(projectDisplayName(project))}</td>`;}
 
+/* 4.3：一次 render 内 allEpisodes() 只算一遍（渲染里会被调用 6 次），渲染结束即作废，
+   保证任何直接改数据的路径都不会读到旧结果。 */
+let episodesMemo = null, episodesMemoActive = false;
 function allEpisodes() {
+  if (episodesMemoActive && episodesMemo) return episodesMemo;
   const list=[];
   for(const proj of state.data.projects) for(const [epNo,ep] of Object.entries(proj.episodes)) {
     list.push({proj,epNo,date:ep.date,duration:ep.duration,sec:t2sec(ep.duration),fee:feeOf(proj,ep),grade:SettlementBilling.grade(proj,ep),type:ep.type||proj.type,mode:ep.mode||proj.mode,rework:workTypeOf(ep)==='重混',workType:workTypeOf(ep),billable:isBillable(ep),excludeReason:ep.excludeReason||'',excludeLabel:ep.excludeReason||exclusionText(ep),needsReview:!!ep.needsReview,multiVersion:!!ep.multiVersion,label:recordLabel(epNo,ep),priceBasis:ep.priceBasis||'delivery',note:ep.note||'',finalCut:ep.finalCut||null});
   }
-  list.sort((a,b)=>a.date.localeCompare(b.date)||String(a.epNo).localeCompare(String(b.epNo),undefined,{numeric:true}));return list;
+  list.sort((a,b)=>a.date.localeCompare(b.date)||String(a.epNo).localeCompare(String(b.epNo),undefined,{numeric:true}));
+  if (episodesMemoActive) episodesMemo = list;
+  return list;
 }
 
 // 交付时间线：同一集的多个版本，最早版本算交付，后续版本算修改；数据变更后缓存作废。
@@ -1354,50 +1361,27 @@ function displayWorkType(e){
 }
 function workTypeClass(type){return type==='修改'?'work-revise':type==='重混'?'work-remix':'work-mix';}
 
-function periodKey(dateStr) {
-  // 未初始化时按自然月，避免启动期把半月口径写进记录（S2-2.7 period 要冻结）。
-  const cycle = state.cycle || 'natural';
-  const d = new Date(dateStr + 'T00:00:00');
-  const y = d.getFullYear(), m = d.getMonth(), day = d.getDate();
-  if (cycle === 'natural') return `${y}-${String(m+1).padStart(2,'0')}`;
-  if (day <= 15) {
-    const pm = m===0?11:m-1, py = m===0?y-1:y;
-    return `${py}-${String(pm+1).padStart(2,'0')}下/${y}-${String(m+1).padStart(2,'0')}上`;
-  } else {
-    const nm = m===11?0:m+1, ny = m===11?y+1:y;
-    return `${y}-${String(m+1).padStart(2,'0')}下/${ny}-${String(nm+1).padStart(2,'0')}上`;
-  }
-}
-function periodLabel(key) {
- if(state.cycle==='natural'){const [y,m]=key.split('-');return `${y}年${Number(m)}月`;}
- const m=key.match(/^(\d{4})-(\d{2})下\/(\d{4})-(\d{2})上$/);
- return m?`${m[1]}年${Number(m[2])}月16日—${m[3]}年${Number(m[4])}月15日`:key;
-}
-
+// 4.1：日期归属全部在 assets/query-core.js（SettlementQuery），这里只传周期口径。
+function periodKey(dateStr) { return SettlementQuery.periodKey(dateStr, state.cycle || 'natural'); }
+function periodLabel(key) { return SettlementQuery.periodLabel(key, state.cycle || 'natural'); }
 // 结算期起止日期（D4：界面默认按自然月看，但导出一律写起止日期）。
 // 期间名在记录里冻结（S2-2.7），所以改 cycle 设置不会改写历史期间。
-function periodRange(key) {
- const pad=(n)=>String(n).padStart(2,'0');
- const lastDay=(y,m)=>new Date(y,m,0).getDate();
- const natural=key.match(/^(\d{4})-(\d{2})$/);
- if(natural){const y=Number(natural[1]),m=Number(natural[2]);return {start:y+'-'+pad(m)+'-01',end:y+'-'+pad(m)+'-'+pad(lastDay(y,m))};}
- const half=key.match(/^(\d{4})-(\d{2})下\/(\d{4})-(\d{2})上$/);
- if(half){return {start:half[1]+'-'+pad(Number(half[2]))+'-16',end:half[3]+'-'+pad(Number(half[4]))+'-15'};}
- const ymd=String(key||'');
- const ok=/^\d{4}-\d{2}-\d{2}$/.test(ymd);
- return {start:ok?ymd:'',end:ok?ymd:''};
-}
+function periodRange(key) { return SettlementQuery.periodRange(key); }
 
 
 // ═══════════════════════════════════════════════════════
 // 渲染
 // ═══════════════════════════════════════════════════════
 function calcSummary(periodOverride,dayOverride) {
- const period=periodOverride??document.getElementById('monthFilter').value,list=allEpisodes().filter(e=>dayOverride?e.date===dayOverride:(!period||periodKey(e.date)===period)), billed=list.filter(e=>e.billable);
- return {eps:list.length,min:Math.round(list.reduce((s,e)=>s+e.sec,0)/60*10)/10,fee:Math.round(list.reduce((s,e)=>s+e.fee,0)*100)/100,billed:billed.length,billedMin:Math.round(billed.reduce((s,e)=>s+e.sec,0)/60*10)/10,excluded:list.length-billed.length,pending:list.filter(e=>e.needsReview).length,types:['混音','重混','修改'].map(t=>t+' '+list.filter(e=>e.workType===t).length+'条').join(' · ')};
+  const period=periodOverride??document.getElementById('monthFilter').value;
+  const list=allEpisodes().filter(e=>dayOverride?e.date===dayOverride:(!period||periodKey(e.date)===period));
+  return SettlementQuery.summarize(list);
 }
 
 function render() {
+  episodesMemo = null;                 // 每次重绘重新派生
+  episodesMemoActive = true;
+  try {
   closeCalendarDetails(true);
   const search=document.getElementById("epFilter"),preview=document.getElementById("searchValue");preview.textContent=search.value;preview.hidden=!search.value;search.title=search.value;
   updateMonthFilter();
@@ -1433,6 +1417,7 @@ function render() {
   document.body.classList.toggle('del-hover', !!settings.hoverDel);
   updateWorkspaceContext();
   scheduleTopPanelFreeze();
+  } finally { episodesMemo = null; episodesMemoActive = false; }    // 渲染结束即失效，外部读到的永远是新数据
 }
 
 function updateMonthFilter() {
@@ -1536,13 +1521,13 @@ function renderDetail() {
             <tbody></tbody>
           </table>
         </div>`;
-      const tbody = xDiv.querySelector('tbody');
+      // 4.3：整块 innerHTML 一次写入，避免 730 行 × 每行一次 DOM 解析
+      let rowsHtml = '';
       eps.forEach((e,i) => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = leadCellHtml(e) +
-          `<td class="record-number">${esc(displayRecordNumber(e,i))}</td>` + cols.map(k=>epCellHtml(e,k)).join('') + actionCellHtml(e);
-        tbody.appendChild(tr);
+        rowsHtml += '<tr>' + leadCellHtml(e) +
+          `<td class="record-number">${esc(displayRecordNumber(e,i))}</td>` + cols.map(k=>epCellHtml(e,k)).join('') + actionCellHtml(e) + '</tr>';
       });
+      xDiv.querySelector('tbody').innerHTML = rowsHtml;
       body.appendChild(xDiv);
     }
     box.appendChild(pDiv);
@@ -3464,24 +3449,20 @@ function confirmProjectRenames() {
 }
 
 // 六个业务字段与时间/计价方式组合筛选，所有软件视图共享同一口径。
-function matchesEpisodeFilter(e,query) {
-  if(!query)return true;
-  const raw=e.proj.episodes[e.epNo],no=raw.episodeNo || (/^\d+$/.test(e.epNo)?e.epNo:null);
-  return query.split(/[,，;；]/).some(part=>{
-    const token=part.trim();if(!token)return false;
-    const m=token.match(/^(?:EP)?(\d+)(?:\s*[-~到]\s*(?:EP)?(\d+))?$/i);
-    if(m)return no!==null&&Number(no)>=Number(m[1])&&Number(no)<=Number(m[2]||m[1]);
-    return [e.label,e.proj.name,e.proj.shortName||'',...(e.proj.aliases||[]),e.type,e.proj.episodes[e.epNo]?.sourceFile||''].some(value=>value.toLowerCase().includes(token.toLowerCase()));
-  });
-}
+function matchesEpisodeFilter(e,query) { return SettlementQuery.matchesEpisodeFilter(e,query); }
 function quickFilterType(type){clearRecordFilters();document.getElementById('typeFilter').value=type;render();}
 function getFilteredList() {
   const v=id=>document.getElementById(id).value;
-  const start=v('dateStart'),end=v('dateEnd');
-  const month=v('monthFilter'),project=v('projFilter'),grade=v('gradeFilter'),mode=v('modeFilter'),query=v('epFilter').trim(),type=v('typeFilter'),work=v('workFilter'),billing=v('billingFilter');
-  return allEpisodes().filter(e=>(!start||e.date>=start)&&(!end||e.date<=end)&&(!month||periodKey(e.date)===month)&&(!project||e.proj.name===project)&&(!grade||e.grade===grade)&&(!mode||e.mode===mode)&&matchesEpisodeFilter(e,query)&&(!type||e.type===type)&&(!work||e.workType===work)&&(!billing||billing==='billable'&&e.billable||billing==='excluded'&&!e.billable||billing==='pending'&&e.needsReview));
+  return SettlementQuery.filterList(allEpisodes(),{
+    start:v('dateStart'),end:v('dateEnd'),month:v('monthFilter'),project:v('projFilter'),
+    grade:v('gradeFilter'),mode:v('modeFilter'),query:v('epFilter'),type:v('typeFilter'),
+    work:v('workFilter'),billing:v('billingFilter')
+  },state.cycle||'natural');
 }
-function hasRecordFilters(){return ['monthFilter','projFilter','gradeFilter','modeFilter','epFilter','typeFilter','workFilter','billingFilter','dateStart','dateEnd'].some(id=>document.getElementById(id).value.trim());}
+function hasRecordFilters(){
+  const values={};for(const id of SettlementQuery.FILTER_IDS)values[id]=document.getElementById(id).value;
+  return SettlementQuery.hasAnyFilter(values);
+}
 function clearRecordFilters(){state.selectedDate=null;state.calYear=null;for(const id of ['monthFilter','projFilter','gradeFilter','modeFilter','epFilter','typeFilter','workFilter','billingFilter','dateStart','dateEnd'])document.getElementById(id).value='';render();}
 const PRESET_COLUMNS={entry:['epNo','proj','type','date','duration','work'],review:['epNo','proj','type','work','billing','date','duration','fee'],settlement:['epNo','proj','grade','type','billing','duration','mode','fee']};
 const WORKSPACE_PRESETS={entry:{label:'录入',freezeLevel:'header',topCollapsed:['cards','summary']},review:{label:'核对',freezeLevel:'header',topCollapsed:['cards','import']},settlement:{label:'结算',freezeLevel:'overview',topCollapsed:['actions','import','summary']}};

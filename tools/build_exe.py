@@ -110,6 +110,9 @@ def main():
         '--onedir', '--windowed',
         '--name', NAME,
         '--icon', ICON,
+        # 4.11：关 UPX。UPX 压缩后的 exe 常被杀软按启发式判成可疑，且首次解压更慢；
+        # 包体大一点换来「不误报、启动快」，对内部工具是划算的。
+        '--noupx',
         # 网页本体与离线依赖
         '--add-data', os.path.join(WEB_ROOT, 'settlement-workbench.html') + os.pathsep + '.',
         '--add-data', os.path.join(WEB_ROOT, 'assets') + os.pathsep + 'assets',

@@ -13,6 +13,7 @@
     {"file": "episode-key-worktype.mjs", "title": "登记判重按工作类型（S2-2.6）"},
     {"file": "rate-snapshot.mjs", "title": "单价按记录冻结（S2-2.10）"},
     {"file": "period-range.mjs", "title": "结算期起止与导出列（S2-2.7）"},
+    {"file": "query-core.mjs", "title": "日期归属/筛选/汇总纯逻辑（4.1）"},
     {"file": "sync-core.mjs", "title": "同步状态机"},
     {"file": "project-workflow-core.mjs", "title": "项目工作流内核"}
   ],
