@@ -47,17 +47,59 @@ class WorkspaceStore:
         self.upgrade_dir = self.root / 'upgrade'
         self.lock = threading.RLock()
 
+    MAX_PROJECTS = 500
+    MAX_RECORDS = 20000
+
     @staticmethod
     def managed(key):
         return key in KEYS or bool(LEDGER_KEY.match(key))
 
     @classmethod
-    def validate(cls, values):
+    def _validate_ledger(cls, key, value):
+        """4.8：服务端最小断言。结构坏了就直接拒写，别等前端读到 Null 才炸。"""
+        try:
+            data = json.loads(value)
+        except (TypeError, ValueError) as error:
+            raise ValueError(f'业务账本不是合法 JSON（{key}）：{error}') from error
+        if not isinstance(data, dict):
+            raise ValueError(f'业务账本顶层必须是对象（{key}）')
+        if not (key == BUSINESS_KEY or key.startswith('settlement_v1_profile_')):
+            # recovery 等键的结构由前端自行约定，服务端只保证可解析、是对象。
+            return
+        projects = data.get('projects')
+        if not isinstance(projects, list):
+            raise ValueError(f'业务账本 projects 必须是数组（{key}）')
+        if len(projects) > cls.MAX_PROJECTS:
+            raise ValueError(f'业务账本项目数超出上限 {cls.MAX_PROJECTS}（{key}）')
+        records = 0
+        for index, project in enumerate(projects):
+            if not isinstance(project, dict):
+                raise ValueError(f'业务账本 projects[{index}] 必须是对象（{key}）')
+            if 'name' in project and not isinstance(project.get('name'), str):
+                raise ValueError(f'业务账本 projects[{index}].name 必须是字符串（{key}）')
+            episodes = project.get('episodes', {})
+            if not isinstance(episodes, dict):
+                raise ValueError(f'业务账本 projects[{index}].episodes 必须是对象（{key}）')
+            for episode_key, record in episodes.items():
+                if not isinstance(record, dict):
+                    raise ValueError(f'业务账本 projects[{index}][{episode_key}] 记录必须是对象（{key}）')
+            records += len(episodes)
+            if records > cls.MAX_RECORDS:
+                raise ValueError(f'业务账本记录数超出上限 {cls.MAX_RECORDS}（{key}）')
+        prices = data.get('prices')
+        if prices is not None and not isinstance(prices, dict):
+            raise ValueError(f'业务账本 prices 必须是对象（{key}）')
+
+    @classmethod
+    def validate(cls, values, strict=True):
         if not isinstance(values, dict) or any(
                 not isinstance(k, str) or not cls.managed(k) or not isinstance(v, str)
                 for k, v in values.items()):
             raise ValueError('工作区字段无效')
-        # Business validation and schema migration remain in the existing UI layer.
+        if strict:
+            for key, value in values.items():
+                if key == BUSINESS_KEY or key.startswith('settlement_v1_profile_') or key.startswith('settlement_recovery_v2'):
+                    cls._validate_ledger(key, value)
         return values
 
     def read(self):
@@ -145,6 +187,8 @@ class WorkspaceStore:
                     continue
                 if not isinstance(value, str):
                     raise ValueError('工作区字段无效')
+                if key == BUSINESS_KEY or key.startswith('settlement_v1_profile_') or key.startswith('settlement_recovery_v2'):
+                    self._validate_ledger(key, value)
                 if storage.get(key) != value:
                     if key == UPGRADE_KEY:
                         # 前端仍内联发送整份快照历史；先归一成索引再比，避免每次启动都误判为变化。
@@ -377,7 +421,8 @@ class WorkspaceStore:
 
     def preserve_legacy(self, values):
         with self.lock, self._file_lock():
-            self.validate(values)
+            # 迁移来的旧浏览器值可能本身就是坏账本；此处只保证键合法，坏内容原样留存备查。
+            self.validate(values, strict=False)
             if not values or values == self.read()['storage']:
                 return
             raw = (json.dumps({'app': 'settlement-workbench', 'storage': values}, ensure_ascii=False, indent=2) + '\n').encode('utf-8')

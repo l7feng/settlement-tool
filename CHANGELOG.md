@@ -4,6 +4,8 @@
 
 | 日期 | 提交 | 说明 |
 | --- | --- | --- |
+| 2026-11-17 | s4(4.2) | **死代码清理（按引用复核后的子集）**：计划列的 10 个函数里有 5 个确实零引用（`toggleDelMode` / `addBatchImportGroup` / `pickBatchImportFiles` / `resetTopLayoutFields` / `saveTopLayout`），已删；另 5 个仍在用，未动——`applyViewPreset`、`toggleSidePanel` 是布局与视图真代码（UI 测试 9/12 处在调），`openReview` 被截图段与测试调用，`applyBatchWorkChanges` 被多项目导入与测试调用，`projEpsFiltered` 被筛选链调用。删除后 grep 零命中，UI 93/93 仍全绿 |
+| 2026-11-17 | s4(4.8) | **服务端最小断言**：`WorkspaceStore.validate()` 与 `patch()` 现在对业务账本（`settlement_v1` 及各 `settlement_v1_profile_*`）做结构校验——必须是合法 JSON、顶层对象、`projects` 数组、项目对象、记录对象、项目数 ≤ 500、记录数 ≤ 20000，失败时抛带键名与字段名的 `ValueError` 且不落盘（原文件字节不变）；`settlement_recovery_v2` 类只要求可解析为对象。`preserve_legacy()` 走 lenient 模式（迁移来的坏账本仍原样留存）。新增 `tests/test_ledger_validate.py` 8/8；用现役账本副本（rev 661、8 个键、5.96 MB）实跑通过，不会把真实数据拦在门外 |
 | 2026-11-17 | s4(4.4) | **xlsx 懒加载**：删掉启动即加载的 `<script src="assets/xlsx.full.min.js">` 与 `document.write` + `cdn.jsdelivr.net` 兜底（原兜底会在断网时静默失败且文案误导）；新增 `ensureXlsx()`，首次点导出才注入本地 `assets/xlsx.full.min.js`，缺文件时报「请用完整发布包重新安装，本工具不需要联网」。启动不再解析 881 KB |
 | 2026-11-17 | s4(4.5) | **示例数据脱敏外移**：`DEFAULT_DATA` 从页面内联字面量（20 个项目、真实剧名与 `D:\Project` 实际路径）移到 `assets/demo-fixture.js`（`window.SETTLEMENT_DEMO_FIXTURE`，合成剧名「示例剧甲…辛 / 示例 Demo 一/二」与 `D:\Project\示例\…` 合成路径）；新增 `tests/test_demo_fixture.py` 4/4（页面零真实剧名/路径、页面读 fixture、xlsx 不再启动即加载） |
 | 2026-11-17 | s3(3.1) | **测试两档化**：新增 `tests/suites.json`（套件清单唯一来源）与 `tools/run-unit.mjs` / `tools/run-ui.mjs`，`package.json` 提供 `npm run test:unit`（无浏览器依赖，**15 套 2.2 s**）、`test:ui`（自动设 `SETTLEMENT_WEB_ROOT`=仓库、`SETTLEMENT_TIMEOUT=300000`）、`test`；`tools/run_tests.py` 改为读同一份 `suites.json`，两处清单不再漂移。`package.json` 声明 `playwright` 为 devDependency（本机未 `npm install` 时 `playwright-runtime` 仍自动回退到系统 Edge） |

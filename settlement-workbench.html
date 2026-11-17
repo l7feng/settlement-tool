@@ -1648,11 +1648,6 @@ function jsStr(s) { return esc(JSON.stringify(String(s))); }
 function attrStr(s) { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
 
 // ── 选择 / 删除 模式（同一列：勾选框 ↔ 红色删除符） ──
-function toggleDelMode() {
-  settings.delMode = !settings.delMode;
-  saveSettings(settings); render();
-  toast(settings.delMode ? '删除模式：点红色 ✕ 直接删除' : '选择模式：勾选后可批量删除');
-}
 function updateModeUI() {
   const b = document.getElementById('modeToggle');
   if (b) {
@@ -2907,10 +2902,8 @@ function updateBatchImportGroup(i,key,value){
  g.open=true;if(key==='billingCategory'||key==='type'){renderMultiProjectImport();return;}
  const container=document.querySelector('[data-import-group="'+i+'"]');if(container){container.querySelector('.import-group-title').innerHTML='<span class="import-project-name">'+esc(g.name||'新项目')+'</span> <small>'+(g.billingCategory==='automation'?'自动化':'精品剧')+'</small>';const grade=document.getElementById('mi_'+i+'_grade');grade.innerHTML=(g.billingCategory==='automation'?['D']:['A','B','C']).map(x=>'<option>'+x+'</option>').join('');for(const field of ['billingCategory','grade','gradeRanges','mode'])document.getElementById('mi_'+i+'_'+field).value=g[field];}
 }
-function addBatchImportGroup(){window._multiImport.revision=(window._multiImport.revision||0)+1;window._multiImport.groups.push(newBatchImportGroup([],{}));window._multiImport.preview=null;renderMultiProjectImport();}
 function removeBatchImportGroup(i){window._multiImport.revision=(window._multiImport.revision||0)+1;window._multiImport.groups.splice(i,1);window._multiImport.preview=null;renderMultiProjectImport();}
 function removeBatchImportFile(i,fi){const x=window._multiImport,g=x.groups[i];if(!g?.files[fi])return;g.files.splice(fi,1);g.scan=scanFiles(g.files);g.open=true;x.revision=(x.revision||0)+1;x.preview=null;renderMultiProjectImport();}
-function pickBatchImportFiles(i){const input=document.createElement('input');input.type='file';input.multiple=true;input.accept='.wav,.mp4';input.onchange=()=>{const g=window._multiImport.groups[i];window._multiImport.revision=(window._multiImport.revision||0)+1;g.files.push(...input.files);g.scan=scanFiles(g.files);g.open=true;window._multiImport.preview=null;renderMultiProjectImport();};input.click();}
 function chooseDemoMedia(folder){const input=document.createElement('input');input.type='file';input.multiple=true;input.accept='.wav,.mp4';if(folder)input.webkitdirectory=true;input.onchange=()=>{const scan=scanFiles(input.files);if(!scan.wavCount)return toast('没有找到音视频');openDemoImport(scan.files);};input.click();}
 async function prepareMultiProjectPreview(){
  const x=window._multiImport,source=JSON.stringify(state.data),revision=x.revision||0;x.preview=null;
@@ -3494,8 +3487,6 @@ function topLayoutFields(prefix,current=settings){
   return `<div class="form-row"><label>冻结范围</label><select id="${prefix}FreezeLevel">${FREEZE_LEVELS.map(([value,label])=>`<option value="${value}" ${current.freezeLevel===value?'selected':''}>${label}</option>`).join('')}</select></div><div class="form-row"><label>背景不透明度</label><input type="range" id="${prefix}TopOpacity" min="0.55" max="1" step="0.01" value="${shownOpacity}" oninput="this.nextElementSibling.textContent=Math.round(this.value*100)+'%'"><output>${Math.round((shownOpacity)*100)}%</output></div><p class="review-hint">控制顶栏、侧栏、统计卡片、分组和信息面板的背景；文字保持清晰。</p><p class="review-hint">选择固定范围；其他区域随明细滚动。</p><div class="layout-options">${TOP_SECTIONS.filter(x=>x.key!=='header').map(x=>`<label><input id="${prefix}Hide_${x.key}" type="checkbox" ${current.topCollapsed?.includes(x.key)?'checked':''}> 收起${x.name}</label>`).join('')}</div>`;
 }
 function readTopLayoutFields(prefix){return {freezeLevel:document.getElementById(prefix+'FreezeLevel').value,topOpacity:Number(document.getElementById(prefix+'TopOpacity').value),topCollapsed:TOP_SECTIONS.filter(x=>x.key!=='header'&&document.getElementById(prefix+'Hide_'+x.key).checked).map(x=>x.key)};}
-function resetTopLayoutFields(prefix){TOP_SECTIONS.filter(x=>x.key!=='header').forEach(x=>document.getElementById(prefix+'Hide_'+x.key).checked=false);}
-function saveTopLayout(){Object.assign(settings,readTopLayoutFields('tl'));settings.freezeTopPanel=settings.freezeLevel!=='none';saveSettings(settings);window.setOverviewOpacity?.(settings.topOpacity);closeModal();applyTopPanelFreeze();}
 function toggleTopCompact(){settings.topCollapsed=settings.topCollapsed?.length?[]:['cards','summary','import'];saveSettings(settings);applyTopPanelFreeze();}
 let appliedLayoutSignature='';
 function applyTopPanelFreeze(){
