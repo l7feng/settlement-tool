@@ -155,7 +155,27 @@
   .field{display:flex;flex-direction:column;gap:4px}
   .field label{font-size:10.5px;color:#7f8a97;letter-spacing:.4px}
   .field .select,.field input{width:100%;height:29px;font-size:12px}
+  .field .select{color-scheme:dark}
+  body.light .field .select{color-scheme:light}
   .field input[type=search]{border:1px solid var(--line);border-radius:8px;background:rgba(255,255,255,.05);color:var(--text);padding:0 10px}
+.combo{position:relative}
+  .combo-trigger{width:100%;height:29px;border:1px solid var(--line);border-radius:8px;background:rgba(255,255,255,.05);color:var(--text);display:flex;align-items:center;gap:8px;padding:0 9px;font-size:12px;text-align:left}
+  .combo-trigger .lbl{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .combo-trigger .ar{font-size:9px;color:#7f8a97}
+  .combo-pop{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:30;background:#171b22;border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 30px #0009;padding:6px;display:flex;flex-direction:column;gap:5px}
+  .combo-pop[hidden]{display:none}
+  .combo-pop input{height:26px;border:1px solid var(--line);border-radius:7px;background:rgba(255,255,255,.05);color:var(--text);padding:0 8px;font-size:11.5px;width:100%}
+  .combo-list{max-height:250px;overflow:auto;display:flex;flex-direction:column;gap:1px}
+  .combo-item{display:flex;align-items:center;gap:8px;height:27px;padding:0 8px;border:0;border-radius:6px;background:none;color:#cfd6de;font-size:12px;text-align:left;flex:0 0 auto}
+  .combo-item:hover{background:rgba(255,255,255,.06)}
+  .combo-item.on{background:rgba(76,141,255,.18);color:#fff}
+  .combo-item .nm{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .combo-item .n{font-size:10px;color:#7f8a97;flex:0 0 auto}
+  .combo-empty{padding:8px;font-size:11.5px;color:#7f8a97;text-align:center}
+  body.light .combo-pop{background:#fff}
+  body.light .combo-item{color:#333}
+  body.light .combo-item.on{background:rgba(76,141,255,.14);color:#111}
+  @media (max-height:640px){.combo-list{max-height:140px}}
   .more{height:29px;border-radius:8px;border:1px solid var(--line);background:rgba(255,255,255,.035);display:flex;align-items:center;padding:0 10px;font-size:11.5px;color:#aab3bd;gap:6px;width:100%}
   .more .n{font-size:10px;color:#8f99a4;border:1px solid var(--line);border-radius:5px;padding:0 5px}
   .more .spacer{flex:1}
@@ -269,7 +289,15 @@
   <aside class="side">
     <div class="hd"><span class="t">筛选与详情</span><div class="spacer"></div><button class="btn ghost" data-act="float" title="侧栏浮动（下一阶段）">浮动</button></div>
     <div class="field"><label>搜索</label><input id="q" type="search" placeholder="集号 / 项目 / 文件名…" autocomplete="off"></div>
-    <div class="field"><label>项目</label><select class="select" id="fProject"></select></div>
+    <div class="field"><label>项目</label>
+      <div class="combo" id="projCombo">
+        <button class="combo-trigger" id="projTrigger" type="button" aria-haspopup="listbox" aria-expanded="false"><span class="lbl" id="projLabel">全部</span><span class="ar">▾</span></button>
+        <div class="combo-pop" id="projPop" hidden>
+          <input id="projSearch" type="search" placeholder="搜索项目…" autocomplete="off">
+          <div class="combo-list" id="projList" role="listbox"></div>
+        </div>
+      </div>
+    </div>
     <div class="field"><label>等级</label><select class="select" id="fGrade"><option value="">全部</option><option>A</option><option>B</option><option>C</option><option>D</option><option value="none">待定级</option></select></div>
     <div class="field"><label>计价状态</label><select class="select" id="fBilling"><option value="">全部</option><option value="billed">已计价</option><option value="excluded">不计价</option><option value="pending">待定级</option></select></div>
     <button class="more" id="moreBtn"><span>更多筛选</span><span class="n">6</span><div class="spacer"></div><span id="moreCaret">▾</span></button>
@@ -644,12 +672,40 @@
       '<div class="spacer"></div><span>工作明细 · ' + monthLabel() + '</span><span>金额 <b>' + masked(money(sum.fee)) + '</b></span>';
   }
 
+  let sideAll = [];
   function renderSide(all) {
-    const projectSel = $('#fProject');
-    const names = Array.from(new Set(all.map(r => r.project.name))).sort((a, b) => a.localeCompare(b, 'zh'));
-    projectSel.innerHTML = '<option value="">全部</option>' + names.map(n => '<option value="' + escAttr(n) + '">' + esc(n) + '</option>').join('');
-    projectSel.value = state.filters.project;
+    sideAll = all;
+    renderProjectList();
     $('#selCount').textContent = state.selected.size;
+  }
+
+  function closeProjectPop() {
+    const pop = $('#projPop');
+    if (!pop) return;
+    pop.hidden = true;
+    $('#projTrigger').setAttribute('aria-expanded', 'false');
+  }
+
+  function renderProjectList(query) {
+    const q = String(query == null ? ($('#projSearch').value || '') : query).trim().toLowerCase();
+    const counts = new Map();
+    sideAll.forEach(r => counts.set(r.project.name, (counts.get(r.project.name) || 0) + 1));
+    const total = sideAll.length;
+    $('#projLabel').textContent = state.filters.project || '全部';
+    const items = [];
+    if (!q || '全部'.includes(q)) items.push([ '', '全部', total ]);
+    Array.from(counts.keys()).sort((a, b) => a.localeCompare(b, 'zh')).forEach(n => {
+      if (q && !n.toLowerCase().includes(q)) return;
+      items.push([n, n, counts.get(n)]);
+    });
+    $('#projList').innerHTML = items.length
+      ? items.map(([v, label, n]) => '<button class="combo-item' + (state.filters.project === v ? ' on' : '') + '" data-project="' + escAttr(v) + '" role="option"><span class="nm">' + esc(label) + '</span><span class="n">' + n + '</span></button>').join('')
+      : '<div class="combo-empty">没有匹配的项目</div>';
+    $$('#projList [data-project]').forEach(btn => btn.onclick = () => {
+      state.filters.project = btn.dataset.project;
+      closeProjectPop();
+      refresh();
+    });
   }
 
   function renderStatus() {
@@ -676,7 +732,7 @@
 
   function syncFilterControls() {
     $('#q').value = state.filters.q;
-    $('#fProject').value = state.filters.project;
+    $('#projLabel').textContent = state.filters.project || '全部';
     $('#fGrade').value = state.filters.grade;
     $('#fBilling').value = state.filters.billing;
     $('#fType').value = state.filters.type;
@@ -1180,7 +1236,16 @@
       timer = setTimeout(() => { state.filters.q = e.target.value; refresh(); }, 120);
     });
     const select = (id, key) => $(id).addEventListener('change', e => { state.filters[key] = e.target.value; refresh(); });
-    select('#fProject', 'project');
+    $('#projTrigger').onclick = e => {
+      e.stopPropagation();
+      const pop = $('#projPop');
+      const willOpen = pop.hidden;
+      pop.hidden = !willOpen;
+      $('#projTrigger').setAttribute('aria-expanded', String(willOpen));
+      if (willOpen) { $('#projSearch').value = ''; renderProjectList(''); $('#projSearch').focus(); }
+    };
+    $('#projSearch').oninput = () => renderProjectList($('#projSearch').value);
+    document.addEventListener('click', e => { if (!e.target.closest('#projCombo')) closeProjectPop(); });
     select('#fGrade', 'grade');
     select('#fBilling', 'billing');
     select('#fType', 'type');

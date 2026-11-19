@@ -63,11 +63,15 @@ check('新表格行数 4 条', await page.evaluate(() => document.querySelectorA
 check('顶部卡 4 条 / 85.00', await page.evaluate(() => document.getElementById('kpiCount').textContent === '4' && document.getElementById('kpiFee').textContent === '¥85.00'));
 check('时长 11.0 分', await page.evaluate(() => document.getElementById('kpiMin').textContent === '11.0'));
 
-await page.selectOption('#fProject', '测试项目甲');
+await page.click('#projTrigger');
+await page.waitForTimeout(150);
+await page.click('#projList [data-project="测试项目甲"]');
 await page.waitForTimeout(200);
 check('项目筛选 3 条 / 70.00', await page.evaluate(() => document.querySelectorAll('#tableBody .row[data-key]').length === 3 && document.getElementById('kpiFee').textContent === '¥70.00'));
 check('筛选 chip 出现', await page.evaluate(() => document.querySelector('#chips').innerText.includes('项目 测试项目甲')));
-await page.selectOption('#fProject', '');
+await page.click('#projTrigger');
+await page.waitForTimeout(120);
+await page.click('#projList [data-project=""]');
 await page.waitForTimeout(200);
 
 await page.fill('#q', 'EP3');
@@ -113,7 +117,9 @@ check('撤销恢复金额', await page.evaluate(() => document.getElementById('k
 await page.evaluate(() => document.querySelector('#tableBody .row[data-key]').click());
 await page.waitForTimeout(100);
 check('行选中计数', await page.evaluate(() => document.getElementById('selCount').textContent === '1'));
-await page.selectOption('#fProject', '测试项目甲');
+await page.click('#projTrigger');
+await page.waitForTimeout(120);
+await page.click('#projList [data-project="测试项目甲"]');
 await page.waitForTimeout(200);
 await page.evaluate(() => {
   const rows = Array.from(document.querySelectorAll('#tableBody .row[data-key]'));
