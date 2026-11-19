@@ -86,6 +86,12 @@ check('点日历日筛选生效', await page.evaluate(() => !document.getElement
 await page.click('#calYear');
 await page.waitForTimeout(250);
 check('年度热力图窗口打开', await page.evaluate(() => !!document.querySelector('.modal') && document.querySelectorAll('.hm-cell[data-date]').length === 365 && document.querySelectorAll('.hm-months span').length === 12));
+await page.click('#hmEye');
+await page.waitForTimeout(200);
+check('热力图金额可隐藏', await page.evaluate(() => document.getElementById('hmStats').textContent.includes('••••••') && document.getElementById('hmEye').textContent === '显示金额'));
+await page.click('#hmEye');
+await page.waitForTimeout(200);
+check('热力图金额可恢复', await page.evaluate(() => !document.getElementById('hmStats').textContent.includes('••••••') && document.getElementById('hmEye').textContent === '隐藏金额'), await page.evaluate(() => document.getElementById('hmStats').textContent + ' | ' + document.getElementById('hmEye').textContent));
 await page.click('[data-hm="fee"]');
 await page.waitForTimeout(200);
 check('热力图可切按金额着色', await page.evaluate(() => document.querySelectorAll('.hm-cell[data-date].lv4').length >= 1));

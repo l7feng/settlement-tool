@@ -1133,7 +1133,8 @@
     }
 
     const body = '<div class="hm-head"><div class="hm-seg"><button data-hm="min" class="on">按工时</button><button data-hm="fee">按金额</button></div>' +
-      '<span class="spacer"></span><span>近 12 个月 · ' + start.getFullYear() + ' 年 ' + (start.getMonth() + 1) + ' 月 → ' + (end.getFullYear()) + ' 年 ' + (end.getMonth() + 1) + ' 月</span></div>' +
+      '<span class="spacer"></span><span>近 12 个月 · ' + start.getFullYear() + ' 年 ' + (start.getMonth() + 1) + ' 月 → ' + (end.getFullYear()) + ' 年 ' + (end.getMonth() + 1) + ' 月</span>' +
+      '<button class="btn ghost sm" id="hmEye" title="显示 / 隐藏金额">显示金额</button></div>' +
       '<div class="hm-chart"><div class="hm-inner"><div id="hmChart">' + chartHtml() + '</div>' +
       '<div class="hm-stats" id="hmStats"></div></div></div>' +
       '<div class="hm-legend"><span>少</span><i class="lv1"></i><i class="lv2"></i><i class="lv3"></i><i class="lv4"></i><span>多</span><span style="margin-left:8px">· 点任意一天跳到当日记录</span></div>';
@@ -1146,6 +1147,7 @@
       const sum = summarize(Array.from(map.keys()).map(k => ({date: k, fee: map.get(k).fee, sec: map.get(k).min * 60, billable: true}))); 
       const active = Array.from(map.values()).filter(x => x.n > 0);
       const peak = active.reduce((a, b) => (a && a.min >= b.min ? a : b), null);
+      $('#hmEye', modal).textContent = state.ui.amountVisible ? '隐藏金额' : '显示金额';
       statsBox.innerHTML = '<span>活跃 <b>' + active.length + '</b> 天</span><span>·</span><span>工时 <b>' + sum.min.toFixed(1) + '</b> 分</span><span>·</span><span>金额 <b>' + masked(money(sum.fee)) + '</b></span><span>·</span><span>最高单日 <b>' + (peak ? peak.min.toFixed(1) : '0.0') + '</b> 分</span>';
       $$('.hm-cell[data-date]', chartBox).forEach(cell => cell.onclick = () => {
         const key = cell.dataset.date;
@@ -1161,6 +1163,12 @@
       $$('[data-hm]', modal).forEach(b => b.classList.toggle('on', b === btn));
       paint();
     });
+    $('#hmEye', modal).onclick = () => {
+      state.ui.amountVisible = !state.ui.amountVisible;
+      saveUi();
+      paint();
+      refresh();
+    };
     paint();
   }
 
