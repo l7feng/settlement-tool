@@ -70,10 +70,11 @@
   .drop .btn{height:26px;font-size:12px}
   .cal{border:1px solid var(--line);border-radius:14px;background:var(--panel);padding:7px 11px 9px;flex:0 0 auto}
   .cal .head{display:flex;align-items:center;gap:8px;margin-bottom:6px}
-  .cal .head .t{font-size:13px;font-weight:650}
+  .cal .head .t{font-size:13px;font-weight:650;white-space:nowrap}
   .cal .head .meta{font-size:11.5px;color:#7f8a97;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .cal .head .spacer{flex:1}
+  .cal .head .spacer{flex:1;min-width:0}
   .cal .head .btn{height:24px;font-size:11.5px}
+  @media (max-width:1100px){.cal .head .meta{display:none}}
   .days{display:flex;flex-wrap:wrap;gap:2px;padding:5px 6px;border-radius:11px;background:rgba(0,0,0,.18);box-shadow:inset 0 0 0 1px rgba(255,255,255,.055)}
   .days.collapsed{display:none}
   .d{flex:1 1 24px;min-width:24px;height:26px;border:0;background:none;border-radius:6px;position:relative;display:grid;place-items:center;font-size:11.5px;color:#5f6a76;padding:0;line-height:1;transition:background .12s,color .12s}
@@ -83,6 +84,40 @@
   .d.today{color:#ffbd8f;font-weight:700}
   .d.today::before{content:'';position:absolute;inset:1px 4px;border:1px solid rgba(255,159,92,.35);border-radius:5px}
   .d.on{background:rgba(76,141,255,.24);color:#fff;box-shadow:inset 0 0 0 1px rgba(76,141,255,.55)}
+  .modal.modal-wide{width:min(980px,95vw)}
+  .hm-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--sub)}
+  .hm-head .spacer{flex:1}
+  .hm-seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .hm-seg button{height:25px;padding:0 11px;font-size:11.5px;background:none;border:0;color:#9aa3af;cursor:pointer}
+  .hm-seg button.on{background:rgba(76,141,255,.18);color:#e8f0ff}
+  .hm-chart{overflow-x:auto;padding:2px 0 3px}
+  .hm-inner{min-width:828px}
+  .hm-months{display:grid;gap:3px;margin-left:21px;margin-bottom:5px;font-size:9.5px;color:#7f8a97}
+  .hm-months span{white-space:nowrap;overflow:visible}
+  .hm-body{display:flex;gap:5px}
+  .hm-wd{display:grid;grid-template-rows:repeat(7,12px);gap:3px;font-size:9.5px;color:#66707c;width:16px;text-align:right}
+  .hm-wd span{line-height:12px}
+  .hm-grid{display:flex;gap:3px}
+  .hm-col{display:grid;grid-template-rows:repeat(7,12px);gap:3px}
+  .hm-cell{width:12px;height:12px;border-radius:2.5px;border:0;padding:0;background:#1b232d;cursor:pointer}
+  .hm-cell.lv1{background:#1e3b5c}
+  .hm-cell.lv2{background:#275d92}
+  .hm-cell.lv3{background:#347fc9}
+  .hm-cell.lv4{background:#66aef0}
+  .hm-cell.today{box-shadow:0 0 0 1px #ffbd8f}
+  .hm-cell:hover{box-shadow:0 0 0 1px #fff}
+  .hm-cell.blank{background:transparent;cursor:default;pointer-events:none}
+  .hm-legend{display:flex;align-items:center;gap:4px;font-size:10px;color:#7f8a97}
+  .hm-legend i{width:12px;height:12px;border-radius:2.5px;display:inline-block}
+  .hm-legend i.lv1{background:#1e3b5c}.hm-legend i.lv2{background:#275d92}.hm-legend i.lv3{background:#347fc9}.hm-legend i.lv4{background:#66aef0}
+  .hm-stats{display:flex;gap:20px;flex-wrap:wrap;font-size:11.5px;color:#8f99a4;border-top:1px solid var(--line);padding-top:9px;margin-top:3px}
+  .hm-stats b{color:#e8ecf1}
+  body.light .hm-cell{background:#ebeef2}
+  body.light .hm-cell.lv1{background:#d6e6fb}
+  body.light .hm-cell.lv2{background:#a8cbf5}
+  body.light .hm-cell.lv3{background:#5d9ee8}
+  body.light .hm-cell.lv4{background:#1f6fc4}
+  body.light .hm-legend i.lv1{background:#d6e6fb}body.light .hm-legend i.lv2{background:#a8cbf5}body.light .hm-legend i.lv3{background:#5d9ee8}body.light .hm-legend i.lv4{background:#1f6fc4}
   .table{flex:1 1 auto;border:1px solid var(--line);border-radius:14px;background:var(--panel);overflow:hidden;display:flex;flex-direction:column;min-height:280px}
   .tscroll{flex:1;min-height:0;overflow:auto}
   .thead{display:grid;grid-template-columns:minmax(190px,250px) 74px 96px 84px 66px 86px 96px minmax(96px,1fr);padding:7px 14px;font-size:11.5px;color:#7f8a97;border-bottom:1px solid var(--line);gap:4px;min-width:820px;position:sticky;top:0;z-index:4;background:#141821}
@@ -214,6 +249,7 @@
         <span class="t" id="calTitle"></span>
         <span class="meta" id="calMeta"></span>
         <div class="spacer"></div>
+        <button class="btn ghost" id="calYear" title="近 12 个月工作量热力图">年度</button>
         <button class="btn ghost" id="calToday">回到本月</button>
         <button class="btn ghost" id="calClear" hidden>看整月</button>
         <button class="btn ghost" id="calToggle">收起</button>
@@ -971,11 +1007,112 @@
 
   function applyTheme() { document.body.classList.toggle('light', state.ui.theme === 'light'); }
 
-  function openModal(title, body, footer) {
+  function dayHeatMap() {
+    const memo = new Map();
+    allRecords().forEach(r => {
+      const key = String(r.date || '').slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) return;
+      const cur = memo.get(key) || {n: 0, min: 0, fee: 0};
+      cur.n += 1;
+      cur.min += (r.sec || 0) / 60;
+      cur.fee += (r.fee || 0);
+      memo.set(key, cur);
+    });
+    return memo;
+  }
+
+  function openYearHeatmap() {
+    const rawMap = dayHeatMap();
+    const [y, m] = state.month.split('-').map(Number);
+    const end = new Date(y, m, 0);
+    const start = new Date(y, m - 12, 1);
+    const gridStart = new Date(start);
+    gridStart.setDate(gridStart.getDate() - ((gridStart.getDay() + 6) % 7));
+    const gridEnd = new Date(end);
+    gridEnd.setDate(gridEnd.getDate() + (6 - ((gridEnd.getDay() + 6) % 7)));
+    const startKey = start.getFullYear() + '-' + pad(start.getMonth() + 1) + '-' + pad(start.getDate());
+    const endKey = end.getFullYear() + '-' + pad(end.getMonth() + 1) + '-' + pad(end.getDate());
+    const map = new Map();
+    rawMap.forEach((v, k) => { if (k >= startKey && k <= endKey) map.set(k, v); });
+    const dayMs = 86400000;
+    const span = Math.round((gridEnd - gridStart) / dayMs) + 1;
+    const cols = Math.ceil(span / 7);
+    const todayKey = monthOf(new Date()) + '-' + pad(new Date().getDate());
+    let metric = 'min';
+
+    const monthLabels = [];
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(start.getFullYear(), start.getMonth() + i, 1);
+      monthLabels.push({text: (d.getMonth() + 1) + '月', col: Math.max(0, Math.floor((d - gridStart) / dayMs / 7))});
+    }
+
+    function valueOf(item) { return metric === 'fee' ? item.fee : item.min; }
+    function levelOf(v, max) {
+      if (!(v > 0)) return 0;
+      return Math.max(1, Math.min(4, Math.ceil(Math.pow(v / max, 0.55) * 4)));
+    }
+
+    function chartHtml() {
+      let vals = [];
+      map.forEach(item => { const v = valueOf(item); if (v > 0) vals.push(v); });
+      const max = vals.length ? Math.max.apply(null, vals) : 1;
+      let out = '<div class="hm-months" style="grid-template-columns:repeat(' + cols + ',12px)">' +
+        monthLabels.map(x => '<span style="grid-column:' + (x.col + 1) + '/span 4">' + x.text + '</span>').join('') + '</div>';
+      out += '<div class="hm-body"><div class="hm-wd"><span>一</span><span></span><span>三</span><span></span><span>五</span><span></span><span>日</span></div><div class="hm-grid">';
+      for (let c = 0; c < cols; c++) {
+        out += '<div class="hm-col">';
+        for (let row = 0; row < 7; row++) {
+          const d = new Date(gridStart); d.setDate(d.getDate() + c * 7 + row);
+          const key = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+          if (d < start || d > end) { out += '<span class="hm-cell blank"></span>'; continue; }
+          const item = map.get(key);
+          const v = item ? valueOf(item) : 0;
+          const lv = item ? levelOf(v, max) : 0;
+          const title = key + (item ? ' · ' + item.n + ' 条 · ' + item.min.toFixed(1) + ' 分 · ' + masked(money(item.fee)) : ' · 无记录');
+          out += '<button class="hm-cell' + (lv ? ' lv' + lv : '') + (key === todayKey ? ' today' : '') + '" data-date="' + key + '" title="' + escAttr(title) + '"></button>';
+        }
+        out += '</div>';
+      }
+      return out + '</div></div>';
+    }
+
+    const body = '<div class="hm-head"><div class="hm-seg"><button data-hm="min" class="on">按工时</button><button data-hm="fee">按金额</button></div>' +
+      '<span class="spacer"></span><span>近 12 个月 · ' + start.getFullYear() + ' 年 ' + (start.getMonth() + 1) + ' 月 → ' + (end.getFullYear()) + ' 年 ' + (end.getMonth() + 1) + ' 月</span></div>' +
+      '<div class="hm-chart"><div class="hm-inner"><div id="hmChart">' + chartHtml() + '</div>' +
+      '<div class="hm-stats" id="hmStats"></div></div></div>' +
+      '<div class="hm-legend"><span>少</span><i class="lv1"></i><i class="lv2"></i><i class="lv3"></i><i class="lv4"></i><span>多</span><span style="margin-left:8px">· 点任意一天跳到当日记录</span></div>';
+
+    const modal = openModal('年度工作量热力图', body, '', true);
+    const chartBox = $('#hmChart', modal);
+    const statsBox = $('#hmStats', modal);
+    function paint() {
+      chartBox.innerHTML = chartHtml();
+      const sum = summarize(Array.from(map.keys()).map(k => ({date: k, fee: map.get(k).fee, sec: map.get(k).min * 60, billable: true}))); 
+      const active = Array.from(map.values()).filter(x => x.n > 0);
+      const peak = active.reduce((a, b) => (a && a.min >= b.min ? a : b), null);
+      statsBox.innerHTML = '<span>活跃 <b>' + active.length + '</b> 天</span><span>·</span><span>工时 <b>' + sum.min.toFixed(1) + '</b> 分</span><span>·</span><span>金额 <b>' + masked(money(sum.fee)) + '</b></span><span>·</span><span>最高单日 <b>' + (peak ? peak.min.toFixed(1) : '0.0') + '</b> 分</span>';
+      $$('.hm-cell[data-date]', chartBox).forEach(cell => cell.onclick = () => {
+        const key = cell.dataset.date;
+        state.month = key.slice(0, 7);
+        state.filters.date = key;
+        $('#monthInput').value = state.month;
+        closeModal();
+        refresh();
+      });
+    }
+    $$('[data-hm]', modal).forEach(btn => btn.onclick = () => {
+      metric = btn.dataset.hm;
+      $$('[data-hm]', modal).forEach(b => b.classList.toggle('on', b === btn));
+      paint();
+    });
+    paint();
+  }
+
+  function openModal(title, body, footer, wide) {
     closeModal();
     const back = document.createElement('div');
     back.className = 'modal-back';
-    back.innerHTML = '<div class="modal" role="dialog" aria-modal="true"><div class="mh"><span class="t">' + esc(title) + '</span><div class="spacer"></div><button class="btn ghost sm" data-close>关闭</button></div>' +
+    back.innerHTML = '<div class="modal' + (wide ? ' modal-wide' : '') + '" role="dialog" aria-modal="true"><div class="mh"><span class="t">' + esc(title) + '</span><div class="spacer"></div><button class="btn ghost sm" data-close>关闭</button></div>' +
       '<div class="mb">' + body + '</div>' + (footer ? '<div class="mf">' + footer + '</div>' : '') + '</div>';
     back.addEventListener('click', e => { if (e.target === back) closeModal(); });
     $$('[data-close]', back).forEach(btn => btn.onclick = closeModal);
@@ -1000,6 +1137,7 @@
     $('#calToday').onclick = () => { state.month = monthOf(new Date()); state.filters.date = ''; $('#monthInput').value = state.month; refresh(); };
     $('#calClear').onclick = () => { state.filters.date = ''; refresh(); };
     $('#calToggle').onclick = () => { state.ui.calCollapsed = !calCollapsed(); saveUi(); refresh(); };
+    $('#calYear').onclick = openYearHeatmap;
     $('#feeEye').onclick = () => { state.ui.amountVisible = !state.ui.amountVisible; saveUi(); refresh(); };
     $('#undoBtn').onclick = undoLast;
     $$('[data-act]').forEach(btn => btn.onclick = () => {

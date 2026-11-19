@@ -79,6 +79,15 @@ await page.waitForTimeout(300);
 await page.evaluate(() => document.querySelector('#calDays .d.has').click());
 await page.waitForTimeout(200);
 check('点日历日筛选生效', await page.evaluate(() => !document.getElementById('calClear').hidden && document.querySelectorAll('#tableBody .row[data-key]').length >= 1));
+await page.click('#calYear');
+await page.waitForTimeout(250);
+check('年度热力图窗口打开', await page.evaluate(() => !!document.querySelector('.modal') && document.querySelectorAll('.hm-cell[data-date]').length === 365 && document.querySelectorAll('.hm-months span').length === 12));
+await page.click('[data-hm="fee"]');
+await page.waitForTimeout(200);
+check('热力图可切按金额着色', await page.evaluate(() => document.querySelectorAll('.hm-cell[data-date].lv4').length >= 1));
+await page.evaluate(() => document.querySelector('.hm-cell[data-date="2026-11-04"]').click());
+await page.waitForTimeout(250);
+check('点热力图格子跳到当日', await page.evaluate(() => document.querySelector('#chips').innerText.includes('日期 11-04') && document.querySelectorAll('#tableBody .row[data-key]').length === 2 && !document.querySelector('.modal')));
 await page.click('#calClear');
 await page.waitForTimeout(200);
 
